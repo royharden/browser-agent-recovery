@@ -68,13 +68,17 @@ class LocalTaskPort:
             return ActionReceipt(request_id, self.public.run_id, self.public.epoch,
                                  self.clock_id, self.now_ns(), "unknown", str(exc))
         response_ns = self.now_ns()
-        status = "acknowledged"
-        error = ""
-        if isinstance(result, dict):
+        status = "unknown"
+        error = "invalid task action response; effect unknown"
+        if isinstance(result, dict) and result.get("request_id") == request_id:
             reported = result.get("status", "acknowledged")
-            status = reported if isinstance(reported, str) and reported in {
-                "acknowledged", "failed", "unchanged", "unknown"} else "unknown"
-            error = str(result.get("error", ""))
+            valid_success = (type(result.get("changed")) is bool
+                             and type(result.get("state_version")) is int
+                             and result["state_version"] >= 0)
+            if reported == "acknowledged" and valid_success:
+                status, error = "acknowledged", ""
+            elif reported in {"failed", "unchanged", "unknown"}:
+                status, error = reported, str(result.get("error", ""))
         if response_ns >= deadline_ns:
             status = "unknown"
             error = "action exceeded deadline; effect may have committed"
