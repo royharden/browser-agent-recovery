@@ -126,6 +126,7 @@ class Executor:
         started, deadline = self._begin(end_ns)
         request_id = uuid4().hex
         outcome = "unknown"
+        timed_out = False
         try:
             try:
                 value = (self.port.observe(deadline) if kind == "observe"
@@ -133,12 +134,15 @@ class Executor:
             except TimeoutError:
                 if kind != "history":
                     raise
+                timed_out = True
                 # An unsuccessful public read is ambiguous, never empty history.
                 value = HistoryRead(self.public.run_id, self.public.epoch,
                                     self.clock_id, request_id, started, self._now(),
                                     None, None, (), successful=False, complete=False)
             completed = self._now()
-            if completed >= deadline:
+            if completed >= deadline and not (
+                    timed_out and completed < self.deadline_ns
+                    and (end_ns is None or completed < end_ns)):
                 if end_ns is not None and deadline == end_ns < self.deadline_ns:
                     raise ReconciliationExpired("history exceeded reconciliation window")
                 raise CapExceeded("read exceeded deadline")
@@ -148,7 +152,7 @@ class Executor:
             elif (not isinstance(value, HistoryRead) or value.request_id != request_id
                   or value.started_ns < started or value.completed_ns > completed):
                 raise InvalidEvidence("history not bound to issued read")
-            outcome = "received"
+            outcome = "timeout" if timed_out else "received"
             return value
         finally:
             self.steps.append(Step(kind, request_id, "controller_resolve", started,
@@ -258,6 +262,7 @@ class Executor:
         self._used.add(intent.root_intent_id)
         first_step = len(self.steps)
         receipts: list[ActionReceipt] = []
+        recovery_end: int | None = None
 
         def result(state: Disposition, reason: str = "") -> ExecutionResult:
             return ExecutionResult(intent.root_intent_id, arm, state, tuple(receipts),
@@ -311,6 +316,17 @@ class Executor:
         except ReconciliationExpired as exc:
             return result("abstained", "AMBIGUOUS_ABSTENTION: " + str(exc))
         except (CapExceeded, TimeoutError) as exc:
+            # Adapter wait/observe methods can raise at their post-call check.
+            # Preserve the recovery disposition even when that lower layer did
+            # not raise our specialized exception (e.g. OS sleep overshoot).
+            try:
+                now = self._now()
+            except InvalidEvidence as invalid:
+                return result("harness_unknown", str(invalid))
+            if (recovery_end is not None and recovery_end < self.deadline_ns
+                    and recovery_end <= now < self.deadline_ns
+                    and len(self.steps) < self.max_actions):
+                return result("abstained", "AMBIGUOUS_ABSTENTION: " + str(exc))
             return result("cap_abort", str(exc))
         except InvalidEvidence as exc:
             return result("harness_unknown", str(exc))
