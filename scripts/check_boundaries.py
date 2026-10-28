@@ -20,7 +20,7 @@ import tomllib
 # These are the only current public roots, plus explicitly named future layers.
 PUBLIC_MODULES = frozenset({
     "rlab.contracts", "rlab.actions", "rlab.snapshot", "rlab.recovery",
-    "rlab.routing", "rlab.scripted", "rlab.public_schema",
+    "rlab.routing", "rlab.scripted", "rlab.public_schema", "rlab.public_records",
 })
 PUBLIC_LAYERS = ("rlab.agents", "rlab.providers", "rlab.worker", "rlab.recovery")
 # Trusted modules are exempt only as ENTRY ROOTS, never as dependency targets of
