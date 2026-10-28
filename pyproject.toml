@@ -12,6 +12,14 @@ dependencies = []
 [project.scripts]
 rlab = "rlab.cli:main"
 
+[tool.setuptools]
+include-package-data = false
+
 [tool.setuptools.packages.find]
 where = ["src"]
 include = ["rlab*"]
+exclude = [
+    "rlab.evaluation", "rlab.evaluation.*",
+    "rlab.heldout", "rlab.heldout.*",
+    "rlab.held_out", "rlab.held_out.*",
+]
