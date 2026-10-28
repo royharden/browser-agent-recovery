@@ -82,6 +82,16 @@ choose run/epoch/root/origin; root intent remains trusted-generated. Reused or
 malformed IDs refuse, and missing response metadata never gets a fabricated time.
 D2 PublicObservation/ActionFeedback mapping requires an explicit accepted codec;
 None is unavailable, and no implicit BrowserSession compatibility is asserted.
-D3 owns matrix scheduling/runner; this backend implements one run and delegates
-matrix/freeze only through an injected orchestration seam. These joined producer
-bindings and all runtime checks remain deferred.
+D3 owns matrix scheduling/runner; DevelopmentMatrixPort implements its single-row
+lifecycle and JoinedDevelopmentOrchestration calls that fixed facade. Explicit
+offline provider/action factories, genuine admission and prompt clearance remain
+operator inputs. Provenance sidecars retain actual provider and loop receipts;
+the evaluator report verifier alone does not cover those sidecars. Source joins
+still require producer acceptance, and all runtime checks remain deferred.
+
+The inherited-pipe source bounds its four-byte length prefix before body reads,
+uses a serialized fixed offline broker owner and authorizes from an actual public
+observation captured by the trusted side. No pipe, descriptor, process or provider
+was exercised. The worker entry point continues to refuse activation because
+canonical launch, enforcement and public browser IPC are unjoined. In-process
+provider calls have no hard preemption guarantee from a pipe deadline.

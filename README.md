@@ -16,8 +16,12 @@ execution mode requires a genuine external admission PASS; missing producer or
 operator anchors remains PENDING and FAIL skips every mode. The single-run
 development backend is source only. Explicit `in_process_convenience` uses the
 existing authority, development task and public scripted session; it qualifies
-neither a real browser nor a sandbox. Canonical hooks and D3 matrix/freeze
-orchestration remain unavailable. The CLI does not start a server or browser.
+neither a real browser nor a sandbox. The fixed accepted admission producer is
+loaded lazily with external anchors. Trusted embedding can compose
+DevelopmentMatrixPort with the separately installed D3 provenance runner through
+JoinedDevelopmentOrchestration; absent facade, input-bound admission or exact
+prompt clearance refuses dispatch. Canonical hooks and source-freeze activation
+remain unavailable. The CLI does not start a server or browser.
 See [CLI source and deferred activation](docs/CLI.md),
 [foundation interfaces](docs/INTERFACES.md), and [host recovery](docs/HOST-RECOVERY.md).
 

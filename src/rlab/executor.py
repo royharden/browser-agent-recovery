@@ -88,7 +88,8 @@ class Executor:
                  run_budget_ns: int = 180_000_000_000,
                  action_budget_ns: int = 3_000_000_000,
                  reconciliation_budget_ns: int = 4_000_000_000,
-                 max_probes: int = 8, poll_wait_ns: int = 500_000_000):
+                 max_probes: int = 8, poll_wait_ns: int = 500_000_000,
+                 absolute_deadline_ns: int | None = None):
         values = (max_actions, port.public.max_actions, run_budget_ns,
                   action_budget_ns, reconciliation_budget_ns, max_probes, poll_wait_ns)
         if any(type(v) is not int or v <= 0 for v in values):
@@ -99,7 +100,12 @@ class Executor:
         self.public = port.public
         self.clock_id = port.clock_id
         self.started_ns = port.now_ns()
+        if absolute_deadline_ns is not None and (
+                type(absolute_deadline_ns) is not int or absolute_deadline_ns < 0):
+            raise ValueError("absolute run deadline must be a nonnegative integer")
         self.deadline_ns = self.started_ns + min(run_budget_ns, 180_000_000_000)
+        if absolute_deadline_ns is not None:
+            self.deadline_ns = min(self.deadline_ns, absolute_deadline_ns)
         self.max_actions = min(max_actions, port.public.max_actions, 40)
         self.action_budget_ns = min(action_budget_ns, 3_000_000_000)
         self.reconciliation_budget_ns = reconciliation_budget_ns
@@ -115,6 +121,8 @@ class Executor:
         self._unbound_request_id: str | None = None
         self._correlation_ids: set[str] = set()
         self._dispatched_ids: set[str] = set()
+        self.operation_count = 0
+        self.history_reads: list[HistoryRead] = []
 
     def _claim_correlation(self, supplied: str | None = None) -> str:
         value = uuid4().hex if supplied is None else supplied
@@ -155,7 +163,7 @@ class Executor:
         now = self._now()
         deadline = min(self.deadline_ns, now + self.action_budget_ns,
                        end_ns if end_ns is not None else self.deadline_ns)
-        if len(self.steps) >= self.max_actions or now >= self.deadline_ns:
+        if self.operation_count >= self.max_actions or now >= self.deadline_ns:
             raise CapExceeded("operation or absolute deadline exhausted")
         if now >= deadline:
             raise ReconciliationExpired("reconciliation window exhausted")
@@ -168,6 +176,7 @@ class Executor:
         timed_out = False
         try:
             try:
+                self.operation_count += 1
                 value = (self.port.observe(deadline) if kind == "observe"
                          else self.port.history(request_id, deadline))
             except TimeoutError:
@@ -178,6 +187,8 @@ class Executor:
                 value = HistoryRead(self.public.run_id, self.public.epoch,
                                     self.clock_id, request_id, started, self._now(),
                                     None, None, (), successful=False, complete=False)
+            if kind == "history" and isinstance(value, HistoryRead):
+                self.history_reads.append(value)
             completed = self._now()
             if completed >= deadline:
                 if end_ns is not None and deadline == end_ns < self.deadline_ns:
@@ -225,6 +236,7 @@ class Executor:
             raise CapExceeded("wait exceeds method/run allowance")
         request_id, outcome = correlation, "unknown"
         try:
+            self.operation_count += 1
             receipt = self.port.interact(action, request_id, deadline)
             completed = self._now()
             if (not isinstance(receipt, InteractionReceipt)
@@ -269,6 +281,7 @@ class Executor:
             raise CapExceeded("wait would exhaust absolute deadline")
         outcome = "unknown"
         try:
+            self.operation_count += 1
             self.port.wait(duration_ns, deadline)
             completed = self._now()
             if completed < started + duration_ns:
@@ -291,6 +304,7 @@ class Executor:
         outcome = "unknown"
         try:
             try:
+                self.operation_count += 1
                 receipt = self.port.execute(intent, request_id, origin, deadline)
             except PreparedCancellationError as exc:
                 # Do not erase pending state or reinterpret failed cleanup as a
@@ -346,6 +360,7 @@ class Executor:
         started, deadline = self._begin(end_ns)
         outcome = "unknown"
         try:
+            self.operation_count += 1
             self.port.prepare_action(request_id, deadline)
             self._prepared_request = request_id
             if self._now() >= deadline:
@@ -480,7 +495,7 @@ class Executor:
                 return result("abstained", "AMBIGUOUS_ABSTENTION: " + str(exc))
             if (recovery_end is not None and recovery_end < call_end
                     and recovery_end <= now < call_end
-                    and len(self.steps) < self.max_actions):
+                    and self.operation_count < self.max_actions):
                 return result("abstained", "AMBIGUOUS_ABSTENTION: " + str(exc))
             return result("cap_abort", str(exc))
         except InvalidEvidence as exc:

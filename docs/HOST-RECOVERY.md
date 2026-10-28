@@ -203,11 +203,26 @@ trusted-generated. Root intent and immediate origin remain controller-owned.
 
 TrustedActionPortAdapter is an explicit loop seam, not a BrowserSession alias.
 It requires a trusted LoopCodec for D2's accepted Action/observation/feedback
-shapes; default None refuses. It preserves exact caller ID/deadline, maps only
-actual receipt timing into feedback and uses None for missing response time.
-The final D2 codec/shape binding is unjoined until producer acceptance; no
-provider/agent module is imported by this adapter. Canonical worker/authority
+shapes; default None refuses. It preserves exact caller ID/deadline and maps only
+actual receipt timing into feedback. Missing final response time halts with an
+unavailable error; it cannot construct D2's integer timestamp feedback honestly.
+The explicit create_offline_action_port factory binds the fixed SessionLoopCodec
+and original captured public form resolver. Producer acceptance is still required
+before claiming that join. The resolver retains the actor-selected row rather
+than selecting a private expected target. Canonical worker/authority
 IPC, resource route enforcement and real browser acknowledgment remain pending.
-Aggregate loop feedback leaves response_ns unset when a final retry is uncertain
-or cleanup is unresolved; an earlier terminal receipt remains in the result but
-cannot stand in for the final issued request's missing completion.
+An uncertain final retry or unresolved cleanup produces no fabricated feedback;
+an earlier terminal receipt remains in the result but cannot stand in for the
+final issued request's missing completion.
+
+## Matrix lifecycle construction (r5)
+
+DevelopmentMatrixPort implements the accepted D3 single-row lifecycle and uses
+one operator authority clock across rows. Each reset creates fresh run, epoch,
+namespace and logical context identities. Caller, run and matrix deadlines bound
+the executor. Actual invoked operation counts and ordinary history receipts are
+retained independently of final clock accounting. Logical stop precedes seal;
+uncertain cleanup halts further dispatch. The external evaluator specification
+never enters the public actor facade. D3 owns scheduling and sidecar validation.
+Missing external admission, prompt clearance or accepted source dependencies
+must remain unattempted. These are source contracts, with no runtime evidence.

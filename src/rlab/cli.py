@@ -81,6 +81,18 @@ class UnavailableError(Exception):
     pass
 
 
+class AcceptedAdmissionPort:
+    """Fixed accepted producer; trust anchors always remain caller supplied."""
+    def admit(self, document: Mapping[str, Any], *, expected_hashes: Mapping[str, str],
+              builder_ids: Sequence[str], trusted_ids: Sequence[str] = ()) -> AdmissionDecision:
+        try:
+            from .admission import admit
+        except ImportError as exc:
+            raise UnavailableError("accepted admission producer unavailable") from exc
+        return admit(document, expected_hashes=expected_hashes,
+                     builder_ids=builder_ids, trusted_ids=trusted_ids)
+
+
 def _unique(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     result: dict[str, Any] = {}
     for key, value in pairs:
@@ -243,7 +255,7 @@ def _parser() -> argparse.ArgumentParser:
 def main(argv: Sequence[str] | None = None, *, ports: OperatorPorts | None = None) -> int:
     """Trusted embedding may inject ports; command-line artifacts cannot load code."""
     args = _parser().parse_args(argv)
-    ports = ports or OperatorPorts()
+    ports = ports or OperatorPorts(admission=AcceptedAdmissionPort())
     try:
         if args.command == "tasks":
             _emit("available", "Original development families only", tasks=[

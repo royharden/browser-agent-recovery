@@ -4,7 +4,7 @@ No Playwright import, startup, network, private spec or local-authority handle.
 There is deliberately no default bridge: missing clock/lineage/render binding
 fails closed. The interface is not evidence of egress isolation or DOM installs.
 """
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from typing import Protocol
 
 from .actions import Action, validate_action
@@ -200,6 +200,21 @@ class BrowserSession:
 
     def now_ns(self) -> int:
         return self._adapter.now_ns()
+
+    @property
+    def context_receipt(self) -> ContextReceipt | None:
+        """Trusted operator lifecycle metadata; never an isolation attestation."""
+        return self._adapter.context
+
+    def execution_receipt(self) -> dict[str, object]:
+        """Actual invoked operations/read receipts, including failed calls.
+
+        The count does not depend on a final clock read succeeding. This operator
+        accessor exposes no authority object, private spec or fault schedule.
+        """
+        return {"actions": self._executor.operation_count,
+                "reads": [asdict(read) for read in self._executor.history_reads],
+                "start_ns": self._executor.started_ns}
 
     def start(self, *, request_id: str | None = None,
               deadline_ns: int | None = None) -> InteractionReceipt:

@@ -14,7 +14,7 @@ No installation or environment setup is part of this milestone.
 | freeze | External admission gate, then injected D3 source-schedule producer | PENDING, exit 3 |
 | report | Build JSON or static HTML through fixed operator evaluator | Unavailable if evaluator absent |
 | verify-report | Verify against separately selected trusted anchors | Unavailable if evaluator absent |
-| admit | Delegate manifest decision to trusted admission port | PENDING/unavailable, exit 3 |
+| admit | Fixed lazy accepted rlab.admission producer with external anchors | PENDING without anchors, exit 3 |
 
 run, matrix, and freeze default to --mode fixture --task F1 --policy R0
 --max-actions 40 --max-probes 4 --horizon-ns 180000000000 --seed 0. Tasks are
@@ -34,7 +34,8 @@ run(request), matrix(request), and freeze(request), each returning a
 PortResult(status, detail, artifact=None) with status complete/pending/unavailable/failed.
 ProviderPort.readiness() is a declared future seam. Trusted Python embedding may call
 main(argv, ports=OperatorPorts(...)). No command-line backend loader exists.
-The normal console entry point injects no admission producer and remains
+The normal console entry point binds AcceptedAdmissionPort, which lazily calls
+the accepted rlab.admission.admit function. Missing external anchors remains
 PENDING. No receipt, trusted ID or PASS is fabricated. There is no command-line
 backend loader. The authored backend reuses run_scripted through the public
 session surface; it does not inspect private expected answers.
@@ -63,17 +64,61 @@ deleted. The logical session must close before Authority.seal. No OS worker is
 launched in this profile. Private record.json and seal.json remain in that
 directory; authority seal contents are never actor observations. Scorer truth
 is not supplied, and no oracle PASS is produced. Failures retain unknown/error
-records where storage remains available. Current authored offline call cost
-alone is known zero; an unattempted call stays unknown. Models remain unmeasured.
+records where storage remains available. Current call cost stays unknown without
+actual provider cost receipts. Models remain unmeasured.
 
 DevelopmentOrchestrationPort declares matrix(request) and freeze(request).
 It is injected into DevelopmentBackend only by trusted embedding. D3 must
 retain every scheduled row, including unknown, errors and not-run remainder,
 and stop on unknown hard failures. Freeze is a source-schedule artifact, never
-a research freeze or independent receipt. That producer is currently unjoined.
+a research freeze or independent receipt. No default orchestration is installed.
+Trusted embedding may inject JoinedDevelopmentOrchestration(inputs=...,
+admission=..., port=...). It delegates only to fixed
+evaluation.matrix_runner.run_matrix; no second scheduler is added. Source-freeze
+activation remains unavailable.
 
-Admission uses the provisional injected facade only; no changing admission module
-is imported or copied:
+DevelopmentMatrixPort(authority, admission=..., profile=..., provider_factory=...,
+action_port_factory=..., provider_limits=..., cleared_prompt_profiles=...) owns
+one-row preflight/reset/execute/close. The operator retains one Authority for its
+whole lifetime so all matrix deadlines share its clock. Preflight requires typed
+external VerifiedAdmission PASS bound to the complete matrix input digest and
+the D3 SealedRun provenance field. Offline actor rows additionally require exact
+external prompt clearance and explicit operator factories/limits. Missing,
+PENDING, FAIL, unsupported selectors or unavailable composition return D3's typed
+UnattemptedRun before DevelopmentTask, context, provider or actor dispatch.
+Default canonical profile remains unavailable.
+
+Reset creates a fresh DevelopmentTask run/epoch/namespace and actual acknowledged
+session context. It forwards absolute matrix/run deadlines into the executor.
+Execute reuses reset's public start receipt, calls public run_scripted or accepted
+run_offline, and closes the logical context before sealing. Cleanup uncertainty
+halts reuse. Actor factories receive public schedule/metadata only; external
+private specifications remain with D3, which binds the record's spec placeholder.
+The evaluator record has exactly seal/spec/execution/cost/reads/media. Raw provider
+attempts, source/current cost, null usage, rejected output and errors remain in
+the separate rlab.run-provenance.v1 sidecar. Current known_zero requires actual
+offline provider receipts; unknown accounting remains unknown. Missing or corrupt
+attempted evidence stays harness_unknown, with no invented completion timestamp.
+This is in-process source composition, with no process/browser/isolation claim.
+
+The accepted D3 r2 sidecar uses explicit normalization of exact immutable provider
+and loop dataclasses and tuples into native JSON. It requires equality of returned
+provider receipts with the actual provider ledger, plus matching ledger/loop/
+execution call counts. Partial coverage is unknown and stops D3 dispatch. Actual
+USD current-cost receipts may be summed as supplied accounting; source-cost
+receipts stay separate and no verified billing is claimed. Null usage remains null.
+D3's private v2 envelope retains sidecars and requires external envelope and
+provenance digest anchors through verify_matrix_envelope; verify-report alone
+does not verify that sidecar. Unsupported or oversized provenance is retained as
+bounded rejection metadata by D3, with an unknown attempted result.
+
+Offline composition may bind action_port_factory with an explicit trusted lambda
+calling create_offline_action_port(session, row, deadline,
+cleared_prompt_profiles=operator_clearance). That helper is not auto-activated;
+the exact accepted SessionLoopCodec and prompt inputs must be available before
+reset. Missing fixed codec source returns UnattemptedRun during preflight.
+
+Admission uses the accepted fixed lazy producer (or explicit trusted injection):
 
     admit(document, *, expected_hashes, builder_ids, trusted_ids=())
         -> AdmissionDecision(state, reasons), with to_dict()
@@ -93,8 +138,8 @@ Missing hash/builder anchors, empty builder IDs, or omitted/empty trusted IDs
 return PENDING with exit 3. A missing producer returns unavailable/exit 3.
 An actual producer decision maps PASS to exit 0, PENDING to 3, FAIL to 2. The
 console includes the explicit state, but withholds private reasons and inputs.
-Admission PASS is not runtime acceptance. Producer schemas and the joined public
-observation/action loop still require reconciliation against D2's final facade.
+Admission PASS is not runtime acceptance. Exact actor codec installation remains
+an operator composition requirement; unavailable codecs refuse before dispatch.
 
 Report input flags are --schedule, --records, --pins, --config, and
 --price, all separately selected JSON files. Schedule shape and private record,

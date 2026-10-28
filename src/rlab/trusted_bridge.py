@@ -4,11 +4,12 @@ The canonical browser/IPC bridge remains unjoined. No default backend is added
 to BrowserSession or CLI. Authority/driver handles stay on this trusted side.
 """
 from html import escape
+from html.parser import HTMLParser
 import json
 from typing import Protocol
 from uuid import uuid4
 
-from .actions import Action, validate_action
+from .actions import Action, Mutation, validate_action
 from .browser import BrowserSession, BridgeUnavailable, ContextReceipt, MediaStatus
 from .contracts import HistoryRead, Intent, Origin
 from .driver import DevelopmentTask
@@ -16,7 +17,153 @@ from .executor import Arm, ExecutionResult
 from .host import LocalTaskPort
 from .ports import ActionReceipt, InteractionReceipt
 from .routing import RoutePolicy
-from .snapshot import Snapshot, referenced_target
+from .snapshot import Snapshot, referenced_target, validate_snapshot
+
+
+class _PublicForms(HTMLParser):
+    """Parse ordinary captured form fields only; no expected-effect lookup."""
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.forms: list[tuple[set[str], dict[str, str]]] = []
+        self.buttons: set[str] | None = None
+        self.fields: dict[str, str] = {}
+        self.textarea: str | None = None
+
+    def _field(self, name: str, value: str) -> None:
+        if name in {"ref", "snapshot"}:
+            return
+        if (name not in {"quantity", "body"} or name in self.fields
+                or len(value) > 4096):
+            raise ValueError("unsupported/duplicate public form field")
+        self.fields[name] = value
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        attributes = dict(attrs)
+        if len(attributes) != len(attrs):
+            raise ValueError("duplicate public form attributes")
+        if tag == "form":
+            if self.buttons is not None:
+                raise ValueError("nested public forms refused")
+            self.buttons, self.fields = set(), {}
+        elif self.buttons is not None:
+            if tag == "button" and attributes.get("id"):
+                self.buttons.add(attributes["id"])
+            elif tag == "input" and attributes.get("name"):
+                self._field(attributes["name"], attributes.get("value") or "")
+            elif tag == "textarea" and attributes.get("name"):
+                self._field(attributes["name"], "")
+                self.textarea = attributes["name"]
+
+    def handle_data(self, data: str) -> None:
+        if self.textarea is not None:
+            value = self.fields[self.textarea] + data
+            if len(value) > 4096:
+                raise ValueError("public textarea cap")
+            self.fields[self.textarea] = value
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag == "textarea":
+            self.textarea = None
+        elif tag == "form" and self.buttons is not None:
+            self.forms.append((self.buttons, self.fields))
+            self.buttons, self.fields = None, {}
+
+
+class OriginalPublicMutationResolver:
+    """Capture the ACTOR's selected public row and literal form state.
+
+    This does not select the row requested by the goal or consult private truth.
+    A wrong native click remains wrong; only R3/R23 fresh semantic guards act.
+    """
+    def __init__(self, session: BrowserSession):
+        self._session = session
+        self._snapshot: Snapshot | None = None
+        self._deadline: int | None = None
+        self._fields: dict[tuple[str, str], str] = {}
+
+    def observe(self, snapshot: Snapshot) -> None:
+        self._snapshot = validate_snapshot(snapshot, self._session.public.run_id,
+                                          self._session.public.epoch)
+
+    def begin(self, deadline_ns: int) -> None:
+        if type(deadline_ns) is not int or deadline_ns < 0:
+            raise ValueError("absolute mutation capture deadline required")
+        self._deadline = deadline_ns
+
+    def applied(self, action: Action) -> None:
+        if action.kind in {"fill", "select"} and self._snapshot is not None:
+            target = referenced_target(action, self._snapshot)
+            if target is not None:
+                self._fields[(target.row_context, target.name)] = action.value
+
+    def __call__(self, provider_action: object, observation: object) -> Mutation | None:
+        if (self._snapshot is None
+                or getattr(observation, "run_id", None) != self._session.public.run_id
+                or getattr(observation, "epoch", None) != self._session.public.epoch
+                or getattr(observation, "clock_id", None) != self._session.clock_id
+                or getattr(observation, "snapshot_epoch", None) != self._snapshot.snapshot_epoch):
+            raise BridgeUnavailable("codec observation differs from original trusted snapshot")
+        if getattr(provider_action, "operation", None) != "click":
+            return None
+        if self._snapshot is None or self._deadline is None:
+            raise BridgeUnavailable("original public snapshot/deadline unavailable")
+        action = Action("click", ref=getattr(provider_action, "ref", ""),
+                        snapshot_epoch=getattr(provider_action, "snapshot_epoch", ""))
+        target = referenced_target(action, self._snapshot)
+        assert target is not None
+        operation = {"Order": "order", "Create ticket": "ticket", "Delete": "delete"}.get(target.name)
+        if operation is None:
+            raise BridgeUnavailable("public mutation button semantics unsupported")
+        parser = _PublicForms()
+        parser.feed(self._snapshot.body)
+        parser.close()
+        matches = [fields for refs, fields in parser.forms if target.ref in refs]
+        if len(matches) != 1:
+            raise ValueError("unique original public form required")
+        payload = dict(matches[0])
+        if operation == "ticket" and (target.row_context, "Body") in self._fields:
+            payload["body"] = self._fields[(target.row_context, "Body")]
+        expected = {"order": {"quantity"}, "ticket": {"body"}, "delete": set()}[operation]
+        if set(payload) != expected or any(not value for value in payload.values()):
+            raise ValueError("original public form fields incomplete")
+        version = self._snapshot.served_version
+        if version is None:
+            history = self._session.history(deadline_ns=self._deadline)
+            if (not history.successful or not history.complete or not history.unfiltered
+                    or history.cached or history.aliases
+                    or (history.run_id, history.epoch, history.clock_id) != (
+                        self._session.public.run_id, self._session.public.epoch, self._session.clock_id)
+                    or type(history.served_version) is not int
+                    or history.served_version != history.latest_version
+                    or history.served_version < 0
+                    or len(history.transitions) != history.served_version
+                    or any(t.state_version != i for i, t in enumerate(history.transitions, 1))):
+                raise BridgeUnavailable("current complete public version unavailable")
+            version = history.served_version
+        return Mutation(operation, target.row_context, tuple(sorted(payload.items())), version)
+
+
+def create_offline_action_port(session: BrowserSession, row: dict, deadline_ns: int, *,
+                               cleared_prompt_profiles: tuple[str, ...] = ()) -> "TrustedActionPortAdapter":
+    """Fixed explicit D2 codec composition; no arbitrary loader or default launch.
+
+    Missing accepted codec remains an unavailable source join. Prompt clearance
+    precedes even a trusted clock read; the caller supplies public row selectors.
+    """
+    from .agents.prompts import select_prompt_profile
+    schedule = row["schedule"]
+    select_prompt_profile(arm=schedule["arm"], source_kind=schedule["source_kind"],
+                          stage="mock" if schedule["source_kind"] == "mock" else "keyless",
+                          cleared_prompt_profiles=cleared_prompt_profiles)
+    from .agents import SessionLoopCodec
+    if type(deadline_ns) is not int or session.now_ns() >= deadline_ns:
+        raise BridgeUnavailable("offline composition deadline expired")
+    resolver = OriginalPublicMutationResolver(session)
+    codec = SessionLoopCodec(session.public,
+                             (session.public.start_path, session.public.start_path + "/history"),
+                             resolver, clock_id=session.clock_id)
+    return TrustedActionPortAdapter(session, codec, arm=schedule["arm"],
+                                    mutation_resolver=resolver)
 
 
 class InProcessDevelopmentBridge:
@@ -172,13 +319,24 @@ class TrustedActionPortAdapter:
     authority to select run/epoch/origin/root lineage. Codecs must be explicitly
     installed by trusted composition after producer acceptance. None refuses.
     """
-    def __init__(self, session: BrowserSession, codec: LoopCodec | None, *, arm: Arm = "R0"):
+    def __init__(self, session: BrowserSession, codec: LoopCodec | None, *, arm: Arm = "R0",
+                 mutation_resolver: OriginalPublicMutationResolver | None = None):
         if codec is None:
             raise BridgeUnavailable("accepted D2 observation/action/feedback codec is not bound")
         self._session, self._codec, self._arm = session, codec, arm
         self.clock_id = session.clock_id
-        self._started = False
+        self._started = session.context_receipt is not None
         self._halted = False
+        self._resolver = mutation_resolver
+
+    @property
+    def codec_diagnostics(self) -> tuple:
+        """Operator-only immutable producer diagnostics, including typed halts."""
+        return tuple(getattr(self._codec, "diagnostics", ()))
+
+    @property
+    def observation_stamps(self) -> tuple:
+        return tuple(getattr(self._codec, "observation_stamps", ()))
 
     def now_ns(self) -> int:
         return self._session.now_ns()
@@ -193,6 +351,8 @@ class TrustedActionPortAdapter:
                 raise BridgeUnavailable("task start not acknowledged")
             self._started = True
         snapshot = self._session.observe(deadline_ns=deadline_ns)
+        if self._resolver is not None:
+            self._resolver.observe(snapshot)
         completed = self.now_ns()
         if type(deadline_ns) is not int or completed >= deadline_ns:
             self._halted = True
@@ -209,6 +369,8 @@ class TrustedActionPortAdapter:
             raise BridgeUnavailable("loop must observe a fresh task before execution")
         if type(deadline_ns) is not int or self.now_ns() >= deadline_ns:
             raise TimeoutError("absolute loop action deadline required and must remain")
+        if self._resolver is not None:
+            self._resolver.begin(deadline_ns)
         mapped = validate_action(self._codec.decode_action(action))
         result = None
         response_ns = None
@@ -221,6 +383,8 @@ class TrustedActionPortAdapter:
                 if result.request_id != request_id:
                     raise ValueError("feedback request identity mismatch")
                 response_ns = result.response_ns
+                if result.status == "acknowledged" and self._resolver is not None:
+                    self._resolver.applied(mapped)
             elif isinstance(result, ExecutionResult):
                 if result.request_id != request_id:
                     raise ValueError("feedback correlation mismatch")
@@ -235,9 +399,25 @@ class TrustedActionPortAdapter:
             self._halted = True
             # No local clock stamp stands in for a missing authority completion.
             response_ns, error = None, type(exc).__name__
+        if response_ns is None:
+            self._halted = True
+            # Accepted D2 feedback requires an actual authority timestamp. There
+            # is no honest ActionFeedback object for an unbound completion.
+            raise BridgeUnavailable("authoritative completion unavailable; no feedback timestamp invented")
         try:
             feedback = self._codec.feedback(request_id=request_id, clock_id=self.clock_id,
                                             response_ns=response_ns, result=result, error=error)
+            if (getattr(feedback, "request_id", None) != request_id
+                    or getattr(feedback, "run_id", None) != self._session.public.run_id
+                    or getattr(feedback, "epoch", None) != self._session.public.epoch
+                    or getattr(feedback, "clock_id", None) != self.clock_id
+                    or getattr(feedback, "response_ns", None) != response_ns):
+                raise ValueError("codec changed trusted feedback binding")
+            acknowledged = (isinstance(result, InteractionReceipt) and result.status == "acknowledged"
+                            or isinstance(result, ExecutionResult)
+                            and result.disposition in {"acknowledged", "committed"})
+            if getattr(feedback, "status", None) == "acknowledged" and not acknowledged:
+                raise ValueError("codec acknowledged a failed/uncertain dispatch")
         except Exception as exc:
             self._halted = True
             raise BridgeUnavailable("accepted loop feedback codec unavailable") from exc

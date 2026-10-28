@@ -68,3 +68,71 @@ policy, bounded whole-worker termination and trusted browser receipt IPC. Then
 authorize and perform actual Linux UID/ACL/egress/FD denial probes, cancellation,
 deadline, peer credential, output durability and read-only scorer checks. All remain
 UNVERIFIED. In-process convenience source is not a sandbox.
+
+## Inherited offline pipe construction (r5)
+
+`worker.InheritedPipe(read_fd, write_fd, owner_uid, codec=BrokerCodec())` is an
+operator-installed capability. It accepts dedicated Linux FIFOs only, owned by
+the configured nonroot owner, with exact read-only/write-only access flags and
+already nonblocking descriptors. It opens, duplicates, reconfigures and closes no
+FDs. The operator must supply the correct two unidirectional ends to each process
+and retain their exclusive lifetimes so descriptor numbers cannot be rebound.
+No endpoint path, descriptor selector or cap is accepted from a worker frame.
+
+Pipe reads take exactly the four-byte big-endian prefix, check the trusted
+BrokerCodec body cap before reading or allocating the body, then read at most
+4096 bytes per iteration. Writes independently validate one canonical bounded
+frame and use at most 4096-byte writes. Selectors wait on actual nonblocking FIFO
+readiness with absolute Linux monotonic deadlines, rechecked on each iteration.
+EOF, partial I/O failure, malformed/oversized input and unknown completion are
+terminal for the owner/client stream; there is no drain, retry or resynchronization.
+Framing failures terminate before broker dispatch; accepted codec frames use the
+broker's existing bounded attempt accounting. The owner stops reading whenever
+`BrokerClosed` or `broker.closed` applies, including after sending the final reply.
+
+`TrustedPromptConfig` freezes operator model, Limits, LoopLimits, exact externally
+cleared prompt hashes, arm/source/stage and at most sixteen requests. It provides
+no live/provider/plugin/endpoint selector. `OfflinePipeOwner(endpoint, provider,
+profile=..., config=...)` retains only accepted built-in offline broker/provider
+objects on the privileged side. It checks prompt clearance before touching the
+provider. Missing clearance raises PromptUnavailable; caller must retain the
+requested scheduled row as not_executed rather than dispatch or substitute arms.
+
+The sole authorization operation is owner-only
+`capture_and_authorize(action_port, request_id, deadline_ns,
+trusted_previous_feedback='')`. It selects the cleared profile before touching
+the clock or observation; validates a fresh trusted ID and bounded authority
+deadline; calls the real trusted ActionPort.observe; requires PublicObservation
+and its matching clock_id; renders D2's accepted prompt messages from that exact
+observation plus operator-retained ordinary feedback; makes the fixed-model/schema/
+limits ProviderRequest; and calls broker.authorize_request. It returns detached
+public wire data only. A fresh owner is required for each run/epoch/clock. Trusted
+previous feedback is an operator input, never taken from worker request fields.
+
+`serve_once(deadline_ns)` never authorizes. It serializes access through a
+non-reentrant lock, rejects duplicate/rebound worker IDs, uses the authorized
+request's original deadline when shorter, and calls accepted broker.handle_frame.
+Broker compares all messages/schema/observation/model/limits against the installed
+binding and consumes it before its single provider invocation. The same ID cannot
+be reauthorized or replayed after rejection, dispatch or uncertain completion.
+Unknown outcomes stay unknown; no timing, usage or paid-accounting receipt is
+invented. A final provider result can be retained privately even when pipe delivery
+times out. The worker receives no attempt ledger, provider or authorization method.
+
+`WorkerPipeClient(endpoint).request(public_request, deadline_ns)` receives only a
+bounded pipe capability, rejects extra request selectors and duplicate IDs, and
+checks response version/request/observation/schema correlation. Its stream is
+serialized and capped at sixteen calls. Model/schema/limits authorization remains
+the private broker owner's job. The lower-level legacy public action decoder
+remains distinct from this accepted provider framing protocol.
+
+These are joined application SOURCE contracts only. No FIFO was opened, read or
+written; no codec, broker, prompt, loop, provider, process or test was executed.
+The default worker entry still refuses because actual inherited-FD provisioning,
+supervisor launch, trusted owner/client wiring and isolated fresh browser context
+are unjoined. The authority clock and pipe deadline must share Linux's monotonic
+domain; clock/FD ownership and descriptor lifetime require runtime verification.
+In-process observe/provider calls cannot be forcibly preempted by selector checks;
+privileged process containment and hard cancellation remain missing. Canonical
+UID/ACL/namespace/egress/scorer qualification and external admission remain refused
+or pending. This source adds no S3 accounting, live SDK or security PASS receipt.
