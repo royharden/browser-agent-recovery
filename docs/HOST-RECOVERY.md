@@ -178,3 +178,36 @@ Only an actual identity-bound authoritative terminal receipt can enter R2/R23
 reconciliation. The halt is latched before fallible final clock accounting and
 blocks further controller operations; the facade also terminates on unknown/cap.
 Trusted operator reconciliation of in-flight requests is a later required hook.
+
+## Explicit development bridge and loop adapter (r4 source)
+
+`create_development_session(task, origin, **limits)` is an operator-only opt-in
+for InProcessDevelopmentBridge. ContextReceipt.profile is explicitly
+in_process_convenience; BrowserSession rejects it unless allow_convenience=True.
+The logical namespace is fresh but is never a browser/isolation attestation.
+Media is unavailable. No default browser bridge or canonical activation exists.
+
+Page.controls adds visible Body textbox refs separately from Page.targets.
+Driver action/remap still consumes button targets only, preserving native
+silent-remap behavior. Projection keeps form values public/escaped and uses
+ordinary task.history; no private DB version or seal enters snapshots.
+session.close is idempotent logical stop, not OS worker death or rollback.
+
+Executor and BrowserSession observe/history/act now accept caller absolute
+deadlines; mutation and interaction methods accept request correlation. Every
+issued deadline is at most the caller/run/method bound, including R1 waits and
+R2/R23 probes/retries. Correlations are bounded ASCII alphanumeric/dash/underscore,
+recorded once per controller; repeated IDs cannot mint another mutation. Initial
+request ID reaches preparation and action unchanged; automatic retry IDs stay
+trusted-generated. Root intent and immediate origin remain controller-owned.
+
+TrustedActionPortAdapter is an explicit loop seam, not a BrowserSession alias.
+It requires a trusted LoopCodec for D2's accepted Action/observation/feedback
+shapes; default None refuses. It preserves exact caller ID/deadline, maps only
+actual receipt timing into feedback and uses None for missing response time.
+The final D2 codec/shape binding is unjoined until producer acceptance; no
+provider/agent module is imported by this adapter. Canonical worker/authority
+IPC, resource route enforcement and real browser acknowledgment remain pending.
+Aggregate loop feedback leaves response_ns unset when a final retry is uncertain
+or cleanup is unresolved; an earlier terminal receipt remains in the result but
+cannot stand in for the final issued request's missing completion.

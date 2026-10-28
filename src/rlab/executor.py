@@ -42,6 +42,7 @@ class ExecutionResult:
     cancelled_request_ids: tuple[str, ...] = ()
     pending_cleanup_request_ids: tuple[str, ...] = ()
     uncertain_request_ids: tuple[str, ...] = ()
+    request_id: str = ""
 
 
 class CapExceeded(Exception):
@@ -112,6 +113,22 @@ class Executor:
         self._cleanup_error: str | None = None
         self._action_error: str | None = None
         self._unbound_request_id: str | None = None
+        self._correlation_ids: set[str] = set()
+        self._dispatched_ids: set[str] = set()
+
+    def _claim_correlation(self, supplied: str | None = None) -> str:
+        value = uuid4().hex if supplied is None else supplied
+        if (not isinstance(value, str) or not 1 <= len(value) <= 128
+                or any(not (c.isascii() and (c.isalnum() or c in "_-")) for c in value)
+                or value in self._correlation_ids):
+            raise ValueError("malformed or reused request correlation")
+        self._correlation_ids.add(value)
+        return value
+
+    def _caller_deadline(self, deadline_ns: int | None) -> int:
+        if deadline_ns is not None and (type(deadline_ns) is not int or deadline_ns < 0):
+            raise ValueError("absolute integer caller deadline required")
+        return min(self.deadline_ns, deadline_ns if deadline_ns is not None else self.deadline_ns)
 
     def _now(self) -> int:
         now = self.port.now_ns()
@@ -146,7 +163,7 @@ class Executor:
 
     def _read(self, kind: str, end_ns: int | None = None) -> Page | HistoryRead:
         started, deadline = self._begin(end_ns)
-        request_id = uuid4().hex
+        request_id = self._claim_correlation()
         outcome = "unknown"
         timed_out = False
         try:
@@ -178,19 +195,20 @@ class Executor:
             self.steps.append(Step(kind, request_id, "controller_resolve", started,
                                    self._now(), outcome))
 
-    def observe(self) -> Page:
+    def observe(self, *, deadline_ns: int | None = None) -> Page:
         """Actor snapshot acquisition shares the run's operation/time budget."""
-        page = self._read("observe")
+        page = self._read("observe", self._caller_deadline(deadline_ns))
         assert isinstance(page, Page)
         return page
 
-    def history(self) -> HistoryRead:
+    def history(self, *, deadline_ns: int | None = None) -> HistoryRead:
         """Native actor history access; no implicit reconciliation or retry."""
-        read = self._read("history")
+        read = self._read("history", self._caller_deadline(deadline_ns))
         assert isinstance(read, HistoryRead)
         return read
 
-    def perform(self, action: Action) -> InteractionReceipt:
+    def perform(self, action: Action, *, request_id: str | None = None,
+                deadline_ns: int | None = None) -> InteractionReceipt:
         """Closed non-mutation interaction sharing the existing run/step caps.
 
         Mutation clicks must go through capture/execute and the selected arm.
@@ -201,10 +219,11 @@ class Executor:
             raise ValueError("mutation requires captured intent and recovery arm")
         if not isinstance(self.port, InteractionPort):
             raise ValueError("closed interaction bridge unavailable")
-        started, deadline = self._begin()
+        correlation = self._claim_correlation(request_id)
+        started, deadline = self._begin(self._caller_deadline(deadline_ns))
         if action.kind == "wait" and started + action.duration_ms * 1_000_000 >= deadline:
             raise CapExceeded("wait exceeds method/run allowance")
-        request_id, outcome = uuid4().hex, "unknown"
+        request_id, outcome = correlation, "unknown"
         try:
             receipt = self.port.interact(action, request_id, deadline)
             completed = self._now()
@@ -264,7 +283,11 @@ class Executor:
     def _issue(self, intent: Intent, origin: Origin,
                end_ns: int | None = None, request_id: str | None = None) -> ActionReceipt:
         started, deadline = self._begin(end_ns)
-        request_id = request_id or uuid4().hex
+        request_id = self._claim_correlation() if request_id is None else request_id
+        if request_id in self._dispatched_ids:
+            raise InvalidEvidence("request already dispatched")
+        self._correlation_ids.add(request_id)
+        self._dispatched_ids.add(request_id)
         outcome = "unknown"
         try:
             try:
@@ -340,17 +363,21 @@ class Executor:
         # Only ref/snapshot change; intended operation, target and fields stay captured.
         return replace(original, target=target) if target is not None else None
 
-    def execute(self, intent: Intent, arm: Arm) -> ExecutionResult:
+    def execute(self, intent: Intent, arm: Arm, *, request_id: str | None = None,
+                deadline_ns: int | None = None) -> ExecutionResult:
         if arm not in {"R0", "R1", "R2", "R3", "R23"}:
             raise ValueError("unknown recovery arm")
         if self._cleanup_error is not None or self._action_error is not None:
             pending = (self._prepared_request,) if self._prepared_request is not None else ()
             uncertain = (self._unbound_request_id,) if self._unbound_request_id is not None else ()
             return ExecutionResult(intent.root_intent_id, arm, "harness_unknown", (), (),
-                                   self._cleanup_error or self._action_error, (), pending, uncertain)
+                                   self._cleanup_error or self._action_error, (), pending, uncertain,
+                                   request_id or "")
         if self._captured.get(intent.root_intent_id) != intent or intent.root_intent_id in self._used:
             raise ValueError("use an unconsumed executor-captured intent")
         self._used.add(intent.root_intent_id)
+        correlation = self._claim_correlation(request_id)
+        call_end = self._caller_deadline(deadline_ns)
         first_step = len(self.steps)
         receipts: list[ActionReceipt] = []
         recovery_end: int | None = None
@@ -378,32 +405,33 @@ class Executor:
             uncertain = ((self._unbound_request_id,)
                          if self._unbound_request_id is not None else ())
             return ExecutionResult(intent.root_intent_id, arm, state, tuple(receipts),
-                                   tuple(self.steps[first_step:]), reason, cancelled, pending_cleanup, uncertain)
+                                   tuple(self.steps[first_step:]), reason, cancelled, pending_cleanup, uncertain,
+                                   correlation)
 
         try:
             guarded = arm in {"R3", "R23"}
-            request_id = uuid4().hex
-            issued = self._guard(intent, request_id) if guarded else intent
+            request_id = correlation
+            issued = self._guard(intent, request_id, call_end) if guarded else intent
             if issued is None:
                 return result("abstained", "RERESOLVE_REFUSED")
             receipt = self._issue(issued, "controller_resolve" if guarded else "agent_direct",
-                                  request_id=request_id)
+                                  end_ns=call_end, request_id=request_id)
             receipts.append(receipt)
             if receipt.status == "acknowledged":
                 return result("acknowledged")
             if arm in {"R0", "R3"}:
                 return result("returned", receipt.error)
             if arm == "R1":
-                self._wait(250_000_000)
+                self._wait(250_000_000, call_end)
                 # Exact same submitted ref and immutable fields; deliberately no R3.
-                retried = self._issue(issued, "controller_retry")
+                retried = self._issue(issued, "controller_retry", call_end)
                 receipts.append(retried)
                 return result("acknowledged" if retried.status == "acknowledged" else "returned",
                               retried.error)
             failed = FailedAction(receipt.run_id, receipt.epoch, receipt.clock_id, receipt.response_ns)
             reconciliation = Reconciliation(intent, failed, self.reconciliation_budget_ns,
                                             self.max_probes)
-            recovery_end = min(self.deadline_ns, failed.response_ns + self.reconciliation_budget_ns)
+            recovery_end = min(call_end, failed.response_ns + self.reconciliation_budget_ns)
             while True:
                 read = self._read("history", recovery_end)
                 assert isinstance(read, HistoryRead)
@@ -444,14 +472,14 @@ class Executor:
                 return result("harness_unknown", "trusted clock unavailable: " + type(invalid).__name__)
             # Genuine run/method overruns take precedence even if an adapter
             # overshoots a shorter recovery deadline by a large amount.
-            if now >= self.deadline_ns or (
+            if now >= call_end or (
                     self.steps and self.steps[-1].completed_ns >=
                     self.steps[-1].started_ns + self.action_budget_ns):
                 return result("cap_abort", str(exc))
-            if isinstance(exc, ReconciliationExpired):
+            if isinstance(exc, ReconciliationExpired) and recovery_end is not None and recovery_end < call_end:
                 return result("abstained", "AMBIGUOUS_ABSTENTION: " + str(exc))
-            if (recovery_end is not None and recovery_end < self.deadline_ns
-                    and recovery_end <= now < self.deadline_ns
+            if (recovery_end is not None and recovery_end < call_end
+                    and recovery_end <= now < call_end
                     and len(self.steps) < self.max_actions):
                 return result("abstained", "AMBIGUOUS_ABSTENTION: " + str(exc))
             return result("cap_abort", str(exc))

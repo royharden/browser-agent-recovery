@@ -11,10 +11,14 @@ solver source are part of the current construction package; their integration
 and execution remain unverified. No sealed F4/FH implementation is included.
 
 The rlab console entry point routes tasks, run, matrix, freeze, report,
-verify-report, and admit. Fixture is the default mode. Trusted fixture,
-admission and provider integrations remain pending: default execution commands
-return nonzero unavailable status, and live mode fails closed. The CLI does not
-start a server or browser. See [CLI source and deferred activation](docs/CLI.md),
+verify-report, and admit. Fixture and canonical profile are defaults. Every
+execution mode requires a genuine external admission PASS; missing producer or
+operator anchors remains PENDING and FAIL skips every mode. The single-run
+development backend is source only. Explicit `in_process_convenience` uses the
+existing authority, development task and public scripted session; it qualifies
+neither a real browser nor a sandbox. Canonical hooks and D3 matrix/freeze
+orchestration remain unavailable. The CLI does not start a server or browser.
+See [CLI source and deferred activation](docs/CLI.md),
 [foundation interfaces](docs/INTERFACES.md), and [host recovery](docs/HOST-RECOVERY.md).
 
 Reports use the provisional fixed evaluation.report operator facade outside

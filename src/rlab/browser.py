@@ -36,6 +36,7 @@ class ContextReceipt:
     context_id: str
     fresh: bool
     media: MediaStatus
+    profile: str = "browser"
 
 
 class TrustedBridge(Protocol):
@@ -63,11 +64,12 @@ class TrustedBridge(Protocol):
     def wait(self, duration_ns: int, deadline_ns: int) -> None: ...
     def interact(self, action: Action, request_id: str,
                  deadline_ns: int) -> InteractionReceipt: ...
+    def close_context(self) -> None: ...
 
 
 class BrowserAdapter:
     """Trusted adapter; never expose this object or backend to an actor worker."""
-    def __init__(self, bridge: TrustedBridge | None, origin: str):
+    def __init__(self, bridge: TrustedBridge | None, origin: str, *, allow_convenience: bool = False):
         if bridge is None:
             raise BridgeUnavailable("trusted browser/server bridge is not implemented or bound")
         self.bridge = bridge
@@ -77,6 +79,7 @@ class BrowserAdapter:
         self.policy = RoutePolicy(origin, self.public.start_path)
         self.context: ContextReceipt | None = None
         self.last_snapshot: Snapshot | None = None
+        self.allow_convenience = allow_convenience
 
     def now_ns(self) -> int:
         if (self.bridge.public != self.public or self.bridge.clock_id != self.clock_id):
@@ -155,11 +158,15 @@ class BrowserAdapter:
             if action.kind != "goto" or action.path != self.public.start_path:
                 raise BridgeUnavailable("first interaction must open the task start path")
             receipt = self.bridge.open_context(self.policy, deadline_ns)
-            if (not isinstance(receipt, ContextReceipt) or not receipt.fresh or not receipt.context_id
+            if (not isinstance(receipt, ContextReceipt) or receipt.fresh is not True
+                    or not isinstance(receipt.context_id, str) or not 1 <= len(receipt.context_id) <= 160
                     or (receipt.run_id, receipt.epoch, receipt.clock_id) != (
                         self.public.run_id, self.public.epoch, self.clock_id)
                     or not isinstance(receipt.media, MediaStatus)):
                 raise BridgeUnavailable("fresh context identity not confirmed")
+            if receipt.profile != "browser" and not (
+                    self.allow_convenience and receipt.profile == "in_process_convenience"):
+                raise BridgeUnavailable("convenience profile requires explicit operator opt-in")
             self.context = receipt
         if action.kind == "goto":
             self.policy.authorize(action.path, "GET")
@@ -180,30 +187,48 @@ class BrowserSession:
     wiring and media stay outside actor snapshots. finish is actor termination,
     never a statement that server effects met an independent oracle.
     """
-    def __init__(self, bridge: TrustedBridge | None, origin: str, **limits: int):
-        self._adapter = BrowserAdapter(bridge, origin)
+    def __init__(self, bridge: TrustedBridge | None, origin: str, *,
+                 allow_convenience: bool = False, **limits: int):
+        self._adapter = BrowserAdapter(bridge, origin, allow_convenience=allow_convenience)
         self._executor = Executor(self._adapter, **limits)
         self.public = self._adapter.public
         self._finished = False
 
-    def start(self) -> InteractionReceipt:
-        return self.act(Action("goto", path=self.public.start_path))
+    @property
+    def clock_id(self) -> str:
+        return self._adapter.clock_id
 
-    def observe(self) -> Snapshot:
+    def now_ns(self) -> int:
+        return self._adapter.now_ns()
+
+    def start(self, *, request_id: str | None = None,
+              deadline_ns: int | None = None) -> InteractionReceipt:
+        return self.act(Action("goto", path=self.public.start_path),
+                        request_id=request_id, deadline_ns=deadline_ns)
+
+    def observe(self, *, deadline_ns: int | None = None) -> Snapshot:
         if self._finished:
             raise ValueError("session finished")
-        self._executor.observe()
+        self._executor.observe(deadline_ns=deadline_ns)
         snapshot = self._adapter.last_snapshot
         if snapshot is None:
             raise BridgeUnavailable("public snapshot unavailable")
         return snapshot
 
-    def history(self) -> HistoryRead:
+    def history(self, *, deadline_ns: int | None = None) -> HistoryRead:
         if self._finished:
             raise ValueError("session finished")
-        return self._executor.history()
+        return self._executor.history(deadline_ns=deadline_ns)
 
-    def act(self, action: Action, arm: Arm = "R0") -> InteractionReceipt | ExecutionResult:
+    def close(self) -> None:
+        """Operator stop; no claim of OS worker/preemption qualification."""
+        if not getattr(self, "_closed", False):
+            self._adapter.bridge.close_context()
+            self._closed = True
+        self._finished = True
+
+    def act(self, action: Action, arm: Arm = "R0", *, request_id: str | None = None,
+            deadline_ns: int | None = None) -> InteractionReceipt | ExecutionResult:
         if self._finished:
             raise ValueError("session finished")
         validate_action(action)
@@ -219,11 +244,11 @@ class BrowserSession:
             m = action.intent
             captured = self._executor.capture(m.operation, m.target_id, m.payload,
                                               target, m.before_version)
-            result = self._executor.execute(captured, arm)
+            result = self._executor.execute(captured, arm, request_id=request_id, deadline_ns=deadline_ns)
             if result.disposition in {"harness_unknown", "cap_abort"}:
                 self._finished = True
             return result
-        receipt = self._executor.perform(action)
+        receipt = self._executor.perform(action, request_id=request_id, deadline_ns=deadline_ns)
         if action.kind == "finish" and receipt.status == "acknowledged":
             self._finished = True
         return receipt

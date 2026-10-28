@@ -27,11 +27,14 @@ class FixtureRequest:
     horizon_ns: int
     seed: int
     mode: Literal["fixture"] = "fixture"
+    profile: Literal["canonical", "in_process_convenience"] = "canonical"
+    condition: Literal["clean", "EXPIRED_VIEW", "STALE_ID", "INTERRUPTED_ACTION"] = "clean"
+    lag_ns: int = 0
 
 
 @dataclass(frozen=True)
 class PortResult:
-    status: Literal["complete", "pending", "unavailable"]
+    status: Literal["complete", "pending", "unavailable", "failed"]
     detail: str
     artifact: Mapping[str, Any] | None = None
 
@@ -208,6 +211,14 @@ def _parser() -> argparse.ArgumentParser:
         command.add_argument("--max-probes", type=_positive, default=4)
         command.add_argument("--horizon-ns", type=_positive, default=180_000_000_000)
         command.add_argument("--seed", type=int, default=0)
+        command.add_argument("--profile", choices=("canonical", "in_process_convenience"), default="canonical")
+        command.add_argument("--condition", choices=("clean", "EXPIRED_VIEW", "STALE_ID", "INTERRUPTED_ACTION"), default="clean")
+        command.add_argument("--lag-ns", type=int, choices=(0, 2_000_000_000), default=0)
+        command.add_argument("--db-root", type=Path)
+        command.add_argument("--manifest", type=Path)
+        command.add_argument("--expected-hashes", type=Path)
+        command.add_argument("--builder-ids", type=Path)
+        command.add_argument("--trusted-ids", type=Path)
         if name == "freeze":
             command.add_argument("--private-dir", required=True, type=Path)
             command.add_argument("--name", default="schedule.json")
@@ -240,25 +251,57 @@ def main(argv: Sequence[str] | None = None, *, ports: OperatorPorts | None = Non
             ])
             return 0
         if args.command in ("run", "matrix", "freeze"):
+            # Gate all modes before backend construction, DB creation or live refusal.
+            if (ports.admission is None or any(value is None for value in (
+                    args.manifest, args.expected_hashes, args.builder_ids, args.trusted_ids))):
+                _emit("pending", "External admission producer and independent operator anchors required", state="PENDING")
+                return 3
+            manifest = args.manifest.resolve(strict=True)
+            if any(manifest.samefile(path.resolve(strict=True)) for path in (
+                    args.expected_hashes, args.builder_ids, args.trusted_ids)):
+                raise ValueError("manifest must be distinct from operator anchors")
+            document = _mapping(manifest)
+            expected = _expected_hashes(args.expected_hashes)
+            builders, trusted = _identities(args.builder_ids), _identities(args.trusted_ids)
+            if not builders or not trusted:
+                _emit("pending", "Independent builder and trusted identities required", state="PENDING")
+                return 3
+            decision = ports.admission.admit(document, expected_hashes=expected,
+                                             builder_ids=builders, trusted_ids=trusted)
+            if decision.state not in ("PASS", "PENDING", "FAIL"):
+                raise ValueError("invalid admission state")
+            if decision.state != "PASS":
+                _emit("failed" if decision.state == "FAIL" else "pending",
+                      "Admission blocks every execution mode", state=decision.state)
+                return 2 if decision.state == "FAIL" else 3
             if args.mode == "live":
                 raise UnavailableError("live execution unavailable: provider/admission/worker integration pending")
             if (args.max_actions > 40 or args.max_probes > 40
                     or not 0 <= args.seed <= 999):
                 raise ValueError("development action/probe caps or seed outside closed bounds")
-            if ports.fixture is None:
-                raise UnavailableError("fixture backend PENDING: trusted public action/snapshot host unavailable")
             request = FixtureRequest(
-                args.task, args.policy, args.max_actions, args.max_probes, args.horizon_ns, args.seed
+                args.task, args.policy, args.max_actions, args.max_probes, args.horizon_ns, args.seed,
+                profile=args.profile, condition=args.condition, lag_ns=args.lag_ns,
             )
+            fixture = ports.fixture
+            if fixture is None:
+                from .dev_backend import DevelopmentBackend
+                fixture = DevelopmentBackend(
+                    admission=ports.admission, document=document, expected_hashes=expected,
+                    builder_ids=builders, trusted_ids=trusted, db_root=args.db_root,
+                )
             if args.command == "run":
-                result = ports.fixture.run(request)
+                result = fixture.run(request)
             elif args.command == "matrix":
-                result = ports.fixture.matrix(request)
+                result = fixture.matrix(request)
             else:
-                result = ports.fixture.freeze(request)
+                result = fixture.freeze(request)
             if result.status != "complete":
-                _emit(result.status, result.detail)
-                return 3
+                execution = (result.artifact or {}).get("execution", "not_run")
+                if execution not in {"not_run", "unknown", "returned"}:
+                    execution = "unknown"
+                _emit(result.status, result.detail, execution=execution)
+                return 2 if result.status == "failed" else 3
             if args.command == "freeze":
                 if result.artifact is None:
                     raise ValueError("freeze returned no schedule artifact")
