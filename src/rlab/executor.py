@@ -265,10 +265,55 @@ class Executor:
             self.steps.append(Step("wait", uuid4().hex, "controller_resolve",
                                    started, self._now(), outcome))
 
+    def _preparatory_operation(self, request_id: str, end_ns: int, origin: Origin):
+        """Count a fixed trusted hook's work before opening the mutation Step."""
+        def operation(kind, success, call):
+            if kind not in {"prepare", "observe"} or not callable(call):
+                raise InvalidEvidence("closed preparatory operation required")
+            started, deadline = self._begin(end_ns)
+            outcome = "unknown:" + success
+            try:
+                self.operation_count += 1
+                value = call(deadline)
+                if kind == "prepare" and success == "prepared":
+                    # The hook returned successfully; retain cleanup ownership
+                    # before fallible final clock/cap accounting.
+                    self._prepared_request = request_id
+                if self._now() >= deadline:
+                    raise CapExceeded("preparatory operation exceeded deadline")
+                outcome = success
+                return value
+            finally:
+                self.steps.append(Step(kind, request_id, origin, started, self._now(), outcome))
+        return operation
+
+    def _prepare(self, request_id: str, end_ns: int | None = None) -> None:
+        _, deadline = self._begin(end_ns)
+        operation = self._preparatory_operation(request_id, deadline, "controller_resolve")
+        try:
+            hook = getattr(self.port, "prepare_counted_action", None)
+            if hook is None:
+                operation("prepare", "prepared", lambda end: self.port.prepare_action(request_id, end))
+            else:
+                hook(request_id, deadline, operation)
+            self._prepared_request = request_id
+        except PreparedCancellationError as exc:
+            self._remember_cleanup_failure(exc)
+            raise
+
     def _issue(self, intent: Intent, origin: Origin,
                end_ns: int | None = None, request_id: str | None = None) -> ActionReceipt:
-        started, deadline = self._begin(end_ns)
         request_id = self._claim_correlation() if request_id is None else request_id
+        submission = getattr(self.port, "prepare_submission", None)
+        if submission is not None and getattr(self.port, "requires_submission_preparation", True):
+            # Native R0/R1/R2 also need the one-use preparation, without semantic
+            # re-resolution. R3/R23 arrive here already prepared by their guard.
+            if self._prepared_request != request_id:
+                self._prepare(request_id, end_ns)
+            _, preparation_end = self._begin(end_ns)
+            submission(intent, request_id, preparation_end,
+                       self._preparatory_operation(request_id, preparation_end, origin))
+        started, deadline = self._begin(end_ns)
         if request_id in self._dispatched_ids:
             raise InvalidEvidence("request already dispatched")
         self._correlation_ids.add(request_id)
@@ -329,21 +374,7 @@ class Executor:
                end_ns: int | None = None) -> Intent | None:
         # Expose a scheduled DOM boundary BEFORE fresh semantic resolution.
         # The task reuses this ID at mutation, never preparing/firing twice.
-        started, deadline = self._begin(end_ns)
-        outcome = "unknown"
-        try:
-            self.operation_count += 1
-            self.port.prepare_action(request_id, deadline)
-            self._prepared_request = request_id
-            if self._now() >= deadline:
-                raise CapExceeded("preparation exceeded deadline")
-            outcome = "prepared"
-        except PreparedCancellationError as exc:
-            self._remember_cleanup_failure(exc)
-            raise
-        finally:
-            self.steps.append(Step("prepare", request_id, "controller_resolve",
-                                   started, self._now(), outcome))
+        self._prepare(request_id, end_ns)
         page = self._read("observe", end_ns)
         assert isinstance(page, Page)
         target = resolve(original, page.targets, page.snapshot_epoch)

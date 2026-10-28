@@ -105,10 +105,20 @@ authorization and action adapter. The privileged browser receipt channel stays
 operator-side. Source scheduling uses the fixed D3 facade and external full-input
 admission/anchors with private exclusive output; no artifact/final pin was generated.
 
-Required seams remain: authenticated preinstalled browser byte capability with
-bounded allocation/preemption; server peer binding one context's POST to trusted
-IntentContext and emitting receipts; privileged launch/inherited-FD provisioning;
-OS descendant/scorer enforcement. The application client cannot implement the
-other owner's authority endpoint or certify UID/ACL/namespace/firewall isolation.
+The accepted server peer and fixed operator composition bind one context's POST
+to trusted IntentContext, connect actual ordinary-event production and independent
+DOM installation observation, and retain terminal receipts. Required activation
+remains: authenticated inherited browser byte capability with bounded allocation/
+preemption; mounting the context-bound HTTP dispatcher at its exact origin;
+privileged launch/inherited-FD provisioning; OS descendant/scorer enforcement.
+Application composition cannot certify UID/ACL/namespace/firewall isolation.
 No launch/setup infrastructure was authored. Runtime qualification and independent
 inputs remain separate required work; declarations cannot replace observed PASS.
+
+The r7 in-process peer profile remains convenience only. Ordinary event callbacks
+come from actual browser command paths; installation callbacks read real public
+DOM without peer IPC reentry. Typed callbacks/object identity are not proof of
+authentication, installation or observed behavior. Counted field refills preserve
+the original public payload and native target exposure; no F2/browser run has
+validated them. Partial operation/deadline/cleanup failures remain explicit and
+do not justify free retries or invented completion times.

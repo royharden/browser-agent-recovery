@@ -36,7 +36,14 @@ _PUBLIC_DOM = r"""() => {
 
 
 class PlaywrightBridge:
-    def __init__(self, ipc: BrowserAuthorityIPC):
+    def __init__(self, ipc: BrowserAuthorityIPC, *, record_interaction,
+                 profile: str = "browser"):
+        if not callable(record_interaction):
+            raise BridgeUnavailable("actual ordinary interaction recorder required")
+        if profile not in {"browser", "browser_peer_in_process"}:
+            raise BridgeUnavailable("closed browser composition profile required")
+        self._record_interaction = record_interaction
+        self._profile = profile
         self._ipc = ipc
         self.public, self.clock_id = ipc.public, ipc.clock_id
         self._policy = None
@@ -123,16 +130,17 @@ class PlaywrightBridge:
             raise
         return ContextReceipt(self.public.run_id, self.public.epoch, self.clock_id,
                               "playwright-" + uuid4().hex, True,
-                              MediaStatus(error="trace/video not requested; runtime unqualified"))
+                              MediaStatus(error="trace/video not requested; runtime unqualified"),
+                              profile=self._profile)
 
     def _reject_extra_page(self, page) -> None:
         if page is not self._page:
             self._route_error = "additional page refused"
             page.close()
 
-    def snapshot(self, deadline_ns: int) -> Snapshot:
+    def project_snapshot(self) -> Snapshot:
+        """Actual DOM projection only: no IPC/clock reentry under peer state lock."""
         page = self._require_page()
-        self._timeout(deadline_ns)
         self._policy.authorize(page.url, "GET")
         data = page.evaluate(_PUBLIC_DOM)
         if (type(data) is not dict or set(data) != {"epochs", "targets", "body"}
@@ -145,34 +153,84 @@ class PlaywrightBridge:
                     epoch, page.url, targets, data["body"]), self.public.run_id, self.public.epoch)
         if self._route_error:
             raise BridgeUnavailable("browser route/resource violation: " + self._route_error)
-        self._timeout(deadline_ns)
         self._snapshot = value
         return value
 
+    def snapshot(self, deadline_ns: int) -> Snapshot:
+        self._timeout(deadline_ns)
+        value = self.project_snapshot()
+        self._timeout(deadline_ns)
+        return value
+
     def prepare_action(self, request_id: str, deadline_ns: int) -> None:
+        # Real browser preparation must enter through executor-owned accounting.
+        raise BridgeUnavailable("counted browser preparation hook required")
+
+    def prepare_counted_action(self, request_id: str, deadline_ns: int, operation) -> None:
         if self._prepared is not None:
             raise BridgeUnavailable("pending preparation must be consumed or cancelled")
-        self._prepared = request_id
-        try:
-            prepared = self._ipc.prepare(request_id, deadline_ns)
-            observed = None
-            if prepared.snapshot is not None:
-                expected = prepared.snapshot
-                self._policy.authorize(expected.url, "GET")
-                if self._page.url != expected.url:
-                    raise BridgeUnavailable("prepare projection URL differs from current document")
-                # Trusted public markup, scripts disabled, every resource routed.
-                # set_content preserves the namespace URL and remapped IDs/epoch.
+        def prepare(end):
+            self._prepared = request_id
+            try:
+                return self._ipc.prepare(request_id, end)
+            except Exception:
+                # Before returning, only this hook knows preparation may exist.
+                # Once it returns the executor owns cleanup, including failures
+                # in post-call accounting; do not cancel a second time here.
+                self.cancel_action(request_id)
+                raise
+        prepared = operation("prepare", "prepared", prepare)
+        observed = None
+        if prepared.snapshot is not None:
+            expected = prepared.snapshot
+            self._policy.authorize(expected.url, "GET")
+            if self._page.url != expected.url:
+                raise BridgeUnavailable("prepare projection URL differs from current document")
+            operation("prepare", "projection_installed", lambda end:
                 self._page.set_content(expected.body, wait_until="domcontentloaded",
-                                       timeout=self._timeout(deadline_ns))
-                observed = self.snapshot(deadline_ns)
-                if (observed.snapshot_epoch, observed.targets) != (expected.snapshot_epoch, expected.targets):
-                    raise BridgeUnavailable("installed public remap projection differs")
-            self._ipc.call("installed", request_id, deadline_ns,
-                           InstalledRender(prepared.installation_id, observed))
-        except Exception:
-            self.cancel_action(request_id)
-            raise
+                                       timeout=self._timeout(end)))
+            observed = operation("observe", "received", self.snapshot)
+            if (observed.snapshot_epoch, observed.targets) != (expected.snapshot_epoch, expected.targets):
+                raise BridgeUnavailable("installed public remap projection differs")
+        # The peer independently calls project_snapshot under its lock. Count
+        # before IPC; callback itself must not reenter clock/budget accounting.
+        operation("observe" if observed is not None else "prepare", "installation_acknowledged",
+            lambda end: self._ipc.call("installed", request_id, end,
+                InstalledRender(prepared.installation_id, observed)))
+
+    def prepare_submission(self, intent: Intent, request_id: str, deadline_ns: int, operation) -> None:
+        """Reapply only original public values on the clicked ref's current form.
+
+        No row/name semantics or private target lookup participates. Every actual
+        fill is a separate local preparatory Step, never an ordinary peer event.
+        """
+        if self._prepared != request_id:
+            raise BridgeUnavailable("bound counted preparation required")
+        if not intent.payload:
+            return
+        button = operation("observe", "submission_button_observed",
+                           lambda end: self._locator(intent.target.ref))
+        form = button.locator("xpath=ancestor::form[1]")
+        def unique(locator, message):
+            if locator.count() != 1:
+                raise ValueError(message)
+            return locator
+        operation("observe", "submission_form_observed",
+                  lambda end: unique(form, "clicked reference requires one current form"))
+        for name, value in intent.payload:
+            if name not in {"body", "quantity"}:
+                raise ValueError("closed admitted public payload field required")
+            field = form.locator('[name="' + name + '"]')
+            operation("observe", "submission_field_observed:" + name,
+                      lambda end: unique(field, "unique current form field required"))
+            if name == "quantity":
+                actual = operation("observe", "public_payload_read:quantity",
+                                   lambda end: field.input_value(timeout=self._timeout(end)))
+                if actual != value:
+                    raise BridgeUnavailable("readonly public quantity differs from admitted payload")
+            else:
+                operation("prepare", "public_payload_refilled:body",
+                          lambda end: field.fill(value, timeout=self._timeout(end)))
 
     def cancel_action(self, request_id: str) -> None:
         try:
@@ -238,33 +296,49 @@ class PlaywrightBridge:
         validate_action(action)
         page = self._require_page()
         timeout = self._timeout(deadline_ns)
-        if action.kind == "goto":
-            page.goto(self._policy.authorize(action.path, "GET"),
-                      wait_until="domcontentloaded", timeout=timeout)
-        elif action.kind == "reload":
+        public = None
+        try:
+            if action.kind == "goto":
+                page.goto(self._policy.authorize(action.path, "GET"),
+                          wait_until="domcontentloaded", timeout=timeout)
+            elif action.kind == "reload":
+                self._policy.authorize(page.url, "GET")
+                page.reload(wait_until="domcontentloaded", timeout=timeout)
+            elif action.kind == "back":
+                # Browser history could contain rejected navigation. Route guard
+                # blocks it before any resource is sent; final URL is checked too.
+                page.go_back(wait_until="domcontentloaded", timeout=timeout)
+            elif action.kind in {"fill", "select"}:
+                if self._snapshot is None:
+                    raise ValueError("captured control required")
+                target = referenced_target(action, self._snapshot)
+                locator = self._locator(target.ref)
+                if action.kind == "fill":
+                    locator.fill(action.value, timeout=timeout)
+                else:
+                    locator.select_option(value=action.value, timeout=timeout)
+            elif action.kind == "wait":
+                self.wait(action.duration_ms * 1_000_000, deadline_ns)
+            elif action.kind != "finish":
+                raise ValueError("mutation requires bound execute")
             self._policy.authorize(page.url, "GET")
-            page.reload(wait_until="domcontentloaded", timeout=timeout)
-        elif action.kind == "back":
-            # Browser history could contain rejected navigation. Route guard
-            # blocks it before any resource is sent; final URL is checked too.
-            page.go_back(wait_until="domcontentloaded", timeout=timeout)
-        elif action.kind in {"fill", "select"}:
-            if self._snapshot is None:
-                raise ValueError("captured control required")
-            target = referenced_target(action, self._snapshot)
-            locator = self._locator(target.ref)
-            if action.kind == "fill":
-                locator.fill(action.value, timeout=timeout)
-            else:
-                locator.select_option(value=action.value, timeout=timeout)
-        elif action.kind == "wait":
-            self.wait(action.duration_ms * 1_000_000, deadline_ns)
-        elif action.kind != "finish":
-            raise ValueError("mutation requires bound execute")
-        self._policy.authorize(page.url, "GET")
-        if self._route_error:
-            raise BridgeUnavailable("browser request blocked: " + self._route_error)
-        receipt = self._ipc.interaction(request_id, deadline_ns, PublicInteraction(page.url, "acknowledged"))
+            if self._route_error:
+                raise BridgeUnavailable("browser request blocked: " + self._route_error)
+            self._timeout(deadline_ns)
+            public = PublicInteraction(page.url, "acknowledged")
+        except Exception as exc:
+            # Actual command/postcheck failure remains an uncertain retained event.
+            public = PublicInteraction(page.url, "unknown", type(exc).__name__)
+        # Privileged actual-event producer runs before status retrieval. Its own
+        # failure propagates; neither IPC nor the worker can fabricate this event.
+        try:
+            self._record_interaction(request_id, public)
+            receipt = self._ipc.interaction(request_id, deadline_ns, public)
+        except Exception:
+            self._closed = True
+            raise
+        if public.status == "unknown":
+            self._closed = True
         if action.kind in {"goto", "back", "reload"}:
             self._snapshot = None
         return receipt

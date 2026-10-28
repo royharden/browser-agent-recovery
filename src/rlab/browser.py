@@ -106,6 +106,24 @@ class BrowserAdapter:
         # Bridge owns post-hook deadline cleanup and must propagate typed failure.
         self.bridge.prepare_action(request_id, deadline_ns)
 
+    def prepare_counted_action(self, request_id: str, deadline_ns: int, operation) -> None:
+        self._check(deadline_ns)
+        hook = getattr(self.bridge, "prepare_counted_action", None)
+        if hook is None:
+            operation("prepare", "prepared", lambda end: self.bridge.prepare_action(request_id, end))
+        else:
+            hook(request_id, deadline_ns, operation)
+
+    @property
+    def requires_submission_preparation(self) -> bool:
+        return callable(getattr(self.bridge, "prepare_submission", None))
+
+    def prepare_submission(self, intent: Intent, request_id: str, deadline_ns: int, operation) -> None:
+        self._check(deadline_ns)
+        hook = getattr(self.bridge, "prepare_submission", None)
+        if hook is not None:
+            hook(intent, request_id, deadline_ns, operation)
+
     def cancel_action(self, request_id: str) -> None:
         try:
             self.bridge.cancel_action(request_id)
@@ -165,7 +183,7 @@ class BrowserAdapter:
                     or not isinstance(receipt.media, MediaStatus)):
                 raise BridgeUnavailable("fresh context identity not confirmed")
             if receipt.profile != "browser" and not (
-                    self.allow_convenience and receipt.profile == "in_process_convenience"):
+                    self.allow_convenience and receipt.profile in {"in_process_convenience", "browser_peer_in_process"}):
                 raise BridgeUnavailable("convenience profile requires explicit operator opt-in")
             self.context = receipt
         if action.kind == "goto":

@@ -250,8 +250,48 @@ then requests a trusted installed acknowledgment. Click binds IntentContext thro
 IPC and obtains terminal completion there even after a browser error. Page headers,
 form fields and client clocks cannot create authoritative lineage or timestamps.
 
-The browser IPC peer/server, privileged activation and actual browser qualification
-remain unjoined. Commands without native timeout support require external hard
+The accepted browser IPC peer/server has application source; privileged activation
+and actual browser qualification remain unjoined. Commands without native timeout support require external hard
 preemption. Dependency/API compatibility, redirects, all-resource enforcement,
 fresh-context behavior and remap acknowledgment have not been exercised. Context
 receipts describe source intent, not isolation PASS.
+
+## Peer composition and public fields (r7 source)
+
+`create_browser_peer_composition(task, origin, context_capability=..., **limits)`
+constructs one operator-only peer/session/bridge/HTTP dispatcher. No listener,
+browser, database or process starts during construction. The in-process framed
+channel has profile `browser_peer_in_process`, requiring explicit convenience
+admission by BrowserSession. This is distinct from canonical operation or an
+authenticated inherited connection. Capability identity does not authenticate
+the operator, HTTP caller or browser context.
+
+The ordinary-event producer is the actual Playwright command path. After a real
+ordinary command completes or its outcome becomes uncertain, its trusted recorder
+calls peer.record_interaction with the fixed capability before requesting IPC
+interaction. The peer stamps its authority clock and retains that actual event;
+the IPC status request cannot create it. Missing producers refuse before browser
+work; later receipt/command failures retain uncertainty rather than mint success.
+
+Installation uses project_snapshot, an actual privileged DOM-only projection.
+It reads current public DOM without now_ns/_timeout/IPC, avoiding reentry into the
+serialized peer during installed verification. The fixed HTTP dispatcher calls
+peer.dispatch_http with its captured capability; headers/forms cannot choose it.
+The accepted TaskHost terminal sink retains actual LocalTaskPort receipts before
+response delivery. The operator must still mount this dispatcher on the admitted
+origin with genuine context authentication and bounded body handling.
+
+Submission preserves the immutable original public intent payload after remap
+installation. Refills use the current form selected by the submitted native ref;
+they do not search for the intended semantic row or consult private expected
+effects. R0/R1 retain native stale/ref-remap exposure; R3/R23 retain their existing
+guarded resolver. Actual added prepare/observe/refill operations share executor
+caps/deadlines and retain local preparatory Step provenance on partial failure.
+Local fill completion is not a fabricated server or ordinary interaction receipt
+while preparation is pending.
+
+Readonly quantity values are observed and compared with the admitted original
+public payload; they are never filled. Button/form/field reads and editable Body
+fills have separate counted boundaries. Legacy bridges without the submission
+hook retain their previous native operation path. Successful preparation ownership
+is retained before post-call clock/cap checks so later failure still cleans up.

@@ -9,6 +9,11 @@ Playwright commands/projection. The operator supplies authenticated IPC and genu
 activation; canonical privileged isolation and runtime remain unqualified. Source
 scheduling delegates to the fixed D3 facade with external admission and anchors.
 
+The explicit browser-peer convenience composition now joins actual ordinary-event
+recording, independent DOM installation observation, context-bound HTTP dispatch
+and budgeted public-field preservation. It supplies no listener, authentication,
+OS isolation, hard preemption or observed browser/HTTP qualification.
+
 The standard-library Python 3.12+ foundation includes public contracts, a
 transactional SQLite authority, original F1 order/F2 ticket/F3 delete development
 adapters and HTML, visible-history verification, semantic re-resolution, and

@@ -188,3 +188,28 @@ passing ordinary Python capabilities does not qualify that enforcement. The two
 owner channels require trusted scheduling and hard process cancellation supplied
 by that later infrastructure. Linux monotonic-domain equality, FIFO ownership,
 browser effects, joined concurrency and all runtime behavior remain unverified.
+
+## Browser peer composition (r7 source)
+
+The operator-only create_browser_peer_composition binds the accepted server peer,
+explicit context capability, framed in-process channel, Playwright bridge, public
+session facade and BoundBrowserPeerHTTP. Its profile is browser_peer_in_process;
+BrowserSession accepts it only under explicit convenience opt-in. The bundle and
+HTTP dispatcher must never be serialized or passed to worker. This is application
+composition, not an authenticated connection, listener or privileged launcher.
+
+Actual producer paths are named in source: real Playwright ordinary command to
+record_interaction closure to peer.record_interaction (authority stamp/retention)
+before IPC interaction retrieval; peer installed verification to DOM-only
+project_snapshot without IPC/clock reentry; BoundBrowserPeerHTTP.__call__ to
+peer.dispatch_http with the captured capability to TaskHost/LocalTaskPort and its
+retained terminal sink. A typed callback or object identity proves none of these
+paths were activated or authenticated. Actual HTTP mounting/body supervision,
+inherited peer credentials, OS isolation and hard preemption remain external.
+
+Original public payload repair targets the current form of the actor's submitted
+native ref, preserving native R0/R1 behavior. Counted prepare/observe/refill work
+consumes existing controller budgets and retains sequential Step outcomes before
+mutation dispatch, including failed/partial operations. Refills during preparation
+are local browser commands, not fabricated authoritative ordinary/server receipts.
+Unknown completion and pending cleanup continue to halt without hidden retries.

@@ -1,12 +1,14 @@
-"""Explicit trusted in-process development embedding; NOT a browser/sandbox.
+"""Explicit operator compositions; construction activates no browser or server.
 
-The canonical browser/IPC bridge remains unjoined. No default backend is added
-to BrowserSession or CLI. Authority/driver handles stay on this trusted side.
+In-process task and browser-peer conveniences are labelled separately. Neither
+establishes authenticated transport, OS isolation or hard preemption. No default
+backend is added to BrowserSession or CLI; privileged handles remain operator-only.
 """
+from dataclasses import dataclass
 from html import escape
 from html.parser import HTMLParser
 import json
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 from uuid import uuid4
 
 from .actions import Action, Mutation, validate_action
@@ -18,6 +20,100 @@ from .host import LocalTaskPort
 from .ports import ActionReceipt, InteractionReceipt
 from .routing import RoutePolicy
 from .snapshot import Snapshot, referenced_target, validate_snapshot
+
+if TYPE_CHECKING:
+    from .browser_receipt_peer import BrowserReceiptPeer
+    from .playwright_bridge import PlaywrightBridge
+
+
+class BoundBrowserPeerHTTP:
+    """Operator-only WSGI application for exactly one already bound peer.
+
+    Mount this application only on the operator's matching HTTP context. This
+    concrete dispatch callsite never chooses authority from environ, headers,
+    cookies or forms. Mounting/authenticating the listener remains external.
+    """
+    def __init__(self, peer: "BrowserReceiptPeer", context_capability: object):
+        if context_capability is None:
+            raise BridgeUnavailable("explicit operator context capability required")
+        self._peer, self._capability = peer, context_capability
+
+    def __call__(self, environ, start_response):
+        return self._peer.dispatch_http(self._capability, environ, start_response)
+
+
+@dataclass(frozen=True)
+class BrowserPeerComposition:
+    """Trusted operator handles; never serialize/pass this bundle to a worker."""
+    session: BrowserSession
+    peer: "BrowserReceiptPeer"
+    bridge: "PlaywrightBridge"
+    http_dispatcher: BoundBrowserPeerHTTP
+    profile: str = "browser_peer_in_process"
+
+
+def create_browser_peer_composition(task: DevelopmentTask, origin: str, *,
+                                    context_capability: object,
+                                    control_timeout_ns: int = 1_000_000_000,
+                                    max_requests: int = 4096,
+                                    **session_limits: int) -> BrowserPeerComposition:
+    """Fixed opt-in in-process framed peer/browser composition, source only.
+
+    Construction starts no browser/listener or HTTP exchange. BrowserSession
+    initializes its controller budget through one in-process framed authority
+    clock bootstrap; constructing this composition is therefore execution.
+    The supplied capability is an explicit operator choice, not authentication.
+    Framing exercises the fixed protocol in process; this is distinctly labelled
+    convenience wiring, never a preauthenticated inherited-channel profile.
+
+    The observer reads the actual Playwright document without IPC reentry while
+    the peer owns its serialized lock. The recorder is called by PlaywrightBridge
+    after an actual ordinary browser operation; an IPC interaction status query
+    cannot invoke it. HTTP effects terminate through this peer's real TaskHost
+    receipt sink. External HTTP mounting/context authentication, browser/runtime
+    activation, supervision and isolation still require separate qualification.
+    """
+    if context_capability is None:
+        raise BridgeUnavailable("explicit operator context capability required")
+    if type(max_requests) is not int or not 1 <= max_requests <= 4096:
+        raise ValueError("bounded retained interaction cap required")
+    if "allow_convenience" in session_limits:
+        raise ValueError("browser-peer convenience profile is fixed by composition")
+    from .browser_ipc import BrowserAuthorityIPC, FramedBrowserChannel, PublicInteraction
+    from .browser_receipt_peer import BrowserReceiptPeer
+    from .playwright_bridge import PlaywrightBridge
+
+    # Immutable metadata returned by the actual producer, not a task/authority
+    # store. The peer owns lifecycle reservations and its primary retained ledger.
+    retained: dict[str, InteractionReceipt] = {}
+
+    def installed_snapshot() -> Snapshot:
+        # Bound below before any operation can execute. project_snapshot must be
+        # DOM-only: no authority clock, IPC request or nested peer lock acquisition.
+        return bridge.project_snapshot()
+
+    def interaction_receipt(request_id: str) -> InteractionReceipt | None:
+        return retained.get(request_id)
+
+    peer = BrowserReceiptPeer(task, origin, context_capability=context_capability,
+                              installed_snapshot=installed_snapshot,
+                              interaction_receipt=interaction_receipt,
+                              control_timeout_ns=control_timeout_ns,
+                              max_requests=max_requests)
+
+    def record_interaction(request_id: str, public: PublicInteraction) -> InteractionReceipt:
+        if request_id in retained or len(retained) >= max_requests:
+            raise BridgeUnavailable("retained actual interaction ledger full/reused")
+        receipt = peer.record_interaction(context_capability, request_id, public)
+        retained[request_id] = receipt
+        return receipt
+
+    ipc = BrowserAuthorityIPC(peer.public, peer.clock_id, FramedBrowserChannel(peer))
+    bridge = PlaywrightBridge(ipc, record_interaction=record_interaction,
+                               profile="browser_peer_in_process")
+    session = BrowserSession(bridge, origin, allow_convenience=True, **session_limits)
+    return BrowserPeerComposition(session, peer, bridge,
+                                  BoundBrowserPeerHTTP(peer, context_capability))
 
 
 class _PublicForms(HTMLParser):

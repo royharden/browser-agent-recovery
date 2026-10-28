@@ -209,3 +209,12 @@ PASS. The facade returns ready/pending/refused; only ready produces an exclusive
 private output using existing rules. Missing facade remains unavailable.
 The artifact is a source schedule and reproducibility binding, not research
 freeze, independent rights/data admission, signature or instrument acceptance.
+
+Browser-peer composition is an explicit trusted embedding helper, not a new CLI
+activation mode. create_browser_peer_composition requires the operator's existing
+task/context capability and returns privileged handles plus a public session;
+only a bounded public transport may reach a worker. Its browser_peer_in_process
+profile is convenience, and session construction performs an in-process authority
+clock bootstrap. Neither helper nor CLI has been executed under Dirty Mode.
+Mounting/authenticating the fixed HTTP dispatcher and all canonical/runtime gates
+remain separate. Source-schedule output retains its source-only meaning.
