@@ -1,7 +1,7 @@
 """Explicit public record mapping to D1's committed 1898202 interfaces.
 
-This is not a BrowserSession adapter. That session does not accept caller request
-IDs/deadlines; the trusted backend must expose the loop's exact receipt binding.
+This module maps public records only. Accepted D1 sessions now forward caller
+IDs/deadlines; SessionLoopCodec joins the trusted adapter's exact receipt binding.
 No request identity, action response time or mutation intent is synthesized here.
 """
 from __future__ import annotations

@@ -75,6 +75,56 @@ stub has no pricing, budget admission, restart durability or dynamic evidence
 claim and does not substitute for S3 or any paid accounting qualification.
 # Public action-loop seam
 
+## Concrete SessionLoopCodec join (r5)
+
+SessionLoopCodec(public,allowed_paths,mutation_resolver,*,clock_id) implements
+the accepted trusted_bridge.LoopCodec structurally, without importing its
+privileged development bridge. D1 explicitly installs it into
+TrustedActionPortAdapter(session,codec,arm=...). Codec and public Mutation resolver
+are operator objects; worker input must not select them. Resolver signature is
+(ProviderAction,captured PublicObservation)->rlab.actions.Mutation, using ORIGINAL
+PUBLIC goal/action fields only. Hidden expected effects/specs are forbidden inputs.
+Allowed paths are exactly the task start route and/or its /history GET route.
+
+decode_action maps through the accepted strict map_action, with no clamping or
+new common role/name/row guard. observation maps through observation_from_snapshot,
+checking run/epoch, fixed configured clock and monotonic supplied start/completion
+interval. These actual intervals are retained on observation_stamps, not inferred.
+No actor-visible observation fields or ActionFeedback integer timestamp shape
+were weakened.
+
+feedback accepts an actual InteractionReceipt or ExecutionResult. It checks
+root correlation, run/epoch/clock, timestamps/status and a one-to-one ordered
+mutation Step/receipt trace. Final response_ns must equal the actual LAST issued
+dispatch's receipt and lie within that dispatch interval. A failed retry lacking
+its own receipt cannot borrow an earlier receipt. Interaction and finish require
+their own matching receipt. Controller committed does not invent a new server
+acknowledgement: final failed/unknown dispatch status remains failed/unknown,
+with the controller disposition visible as ordinary feedback metadata.
+The loop dispatches finish through the same ActionPort/codec path, retains its
+feedback, and returns finished only for acknowledged completion within deadline.
+Unknown/failed finish halts as harness_unknown with the feedback retained; it is
+never implicitly retried or treated as server-goal success.
+Final action clock validation occurs before the single feedback record. If a
+later operation fails after recording, that record is marked unknown rather
+than duplicated; returned feedback/provider metadata remains retained.
+
+Missing response time/result, cap/harness failure, cancelled preparation,
+pending cleanup, uncertain action or mismatched trace raises typed
+SessionCodecUnavailable and latches codec halt. No client clock/zero/earlier retry
+receipt is substituted. Frozen diagnostics are retained on codec.diagnostics;
+D1's adapter may wrap the exception, so the operator retains the codec for
+diagnosis. Further codec calls refuse after a halt. This is conservative unknown
+termination, not a negative-effect or clean-result claim.
+
+Accepted D1 BrowserSession now forwards caller request IDs/deadlines.
+TrustedActionPortAdapter plus explicit codec
+is the concrete SOURCE seam. No session/codec execution or runtime compatibility
+was checked. Actual browser/process/pipe/worker/timeout boundaries remain unverified.
+Provider Cost remains its distinct record; D1's row serializer must explicitly
+map current vs replay-source costs into evaluator cost fields without zeroing
+unknown usage or unresolved amounts. This codec adds no paid accounting.
+
 ## Offline broker and inherited-pipe codec source (r4)
 
 OfflineBroker(provider,*,model_id,profile,limits,expected_requests=(),codec=BrokerCodec(),
@@ -167,14 +217,12 @@ intent is guessed from the reference or generated from private expected effects.
 rlab.agents.observation_from_snapshot() uses D1 validate_snapshot and serializes
 ordinary body/targets/url/served_version into a detached PublicObservation.
 
-BrowserSession.observe() returns Snapshot with no caller deadline argument;
-BrowserSession.act(Action,arm) does not accept the loop request ID/deadline. Thus
-it is NOT assumed to implement ActionPort directly. D1's trusted backend must
-forward the exact caller request ID, absolute authority-clock deadline and bound
-receipt metadata, rather than manufacture ActionFeedback from client timing.
-The mapping module delays D1 imports until called so existing offline records
-remain importable on the older base; actual mapping requires the D1 source merge.
-No browser/loop execution or joined compatibility is claimed.
+Accepted BrowserSession.observe(deadline_ns=...) returns Snapshot and
+act(Action,arm,request_id=...,deadline_ns=...) forwards caller metadata. Its raw
+record shapes remain distinct from ActionPort: TrustedActionPortAdapter and the
+explicit SessionLoopCodec perform that join. No ActionFeedback metadata is
+manufactured from client timing. Mapping imports remain deferred, and no
+browser/loop execution or runtime compatibility is claimed.
 
 `rlab.agents.run_offline(provider, port, *, model_id, provider_limits=Limits(),
 limits=LoopLimits(), request_id_factory=None) -> LoopResult` consumes these offline
