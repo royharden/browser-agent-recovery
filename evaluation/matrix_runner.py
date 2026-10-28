@@ -97,10 +97,15 @@ def validate_inputs(inputs: dict) -> dict:
 
 
 def _unknown(spec: dict, lease: RunLease | None, reason: str) -> dict:
+    # A failed reset may return a typed dataclass with invalid field values.
+    # Never let an unvalidated object/NaN contaminate the retained JSON fallback.
+    def identity(value: object) -> str | None:
+        return value if isinstance(value, str) and value.strip() else None
+
     return {"seal": None, "spec": spec,
-            "execution": {"run_id": lease.run_id if lease else None,
-                          "epoch": lease.epoch if lease else None,
-                          "clock_id": lease.clock_id if lease else None,
+            "execution": {"run_id": identity(lease.run_id) if lease else None,
+                          "epoch": identity(lease.epoch) if lease else None,
+                          "clock_id": identity(lease.clock_id) if lease else None,
                           "start_ns": None, "termination": "harness_unknown",
                           "actions": None, "model_calls": None, "failures": ["HARNESS_UNKNOWN", reason]},
             "cost": {"state": "unknown", "known_usd": None, "unresolved_usd": None},
