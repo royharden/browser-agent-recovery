@@ -9,8 +9,7 @@ from typing import Callable, NoReturn, TypeGuard
 
 from ..actions import Action, Mutation
 from ..contracts import PublicTask
-from ..executor import ExecutionResult, Step
-from ..ports import ActionReceipt, InteractionReceipt
+from ..public_records import ActionReceipt, ExecutionResult, InteractionReceipt, Step
 from ..providers import Action as ProviderAction, parse_action
 from ..snapshot import Snapshot
 from .loop import ActionFeedback, PublicObservation

@@ -1,4 +1,4 @@
-"""Public-only offline action loop; no authority, private spec or scorer import."""
+"""Public-only loop/record codec; no eager trusted controller or port import."""
 from .loop import (ActionFeedback, ActionPort, LoopLimits, LoopResult, LoopStep,
                    PublicObservation, run_offline)
 from .mapping import map_action, observation_from_snapshot

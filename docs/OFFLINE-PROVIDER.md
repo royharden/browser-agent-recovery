@@ -75,6 +75,27 @@ stub has no pricing, budget admission, restart durability or dynamic evidence
 claim and does not substitute for S3 or any paid accounting qualification.
 # Public action-loop seam
 
+## Canonical immutable public records (r6)
+
+rlab.public_records is the sole definition site for ActionReceipt,
+InteractionReceipt, Step, ExecutionResult and the pure Arm/Disposition aliases.
+It imports only dataclasses/typing and public contracts. It contains no controller
+methods, port protocols, private handles, state engine, authority or scorer access.
+SessionLoopCodec imports the record classes there, so eager rlab.agents package
+initialization no longer reaches trusted executor/ports through that codec.
+
+Legacy rlab.ports.ActionReceipt/InteractionReceipt and
+rlab.executor.Step/ExecutionResult/Arm/Disposition re-export the exact same
+objects, preserving existing imports and isinstance composition. Record field
+order/defaults/decorators/annotations and JSON dataclass shapes are unchanged;
+no retry, timing, cancellation, cleanup or interaction behavior is moved/changed.
+The class source/__module__ is now rlab.public_records. D4 must update canonical
+schema-source labels and explicitly declare this new pure public module in its
+read-only static policy map; this is not permission to exempt trusted controller
+or worker layers. Existing checker/schema files are outside D2 ownership.
+Runtime class-identity, serialization and installed-wheel compatibility remain
+unverified until the later authorized phase; source aliases are not a runtime pass.
+
 ## Concrete SessionLoopCodec join (r5)
 
 SessionLoopCodec(public,allowed_paths,mutation_resolver,*,clock_id) implements
