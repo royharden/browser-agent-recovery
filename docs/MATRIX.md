@@ -172,7 +172,14 @@ request ID, observation/schema/model/message/limit provenance; malformed request
 may have request/binding null. The actual provider representation is normalized
 by D1 to JSON; the collector never calls repr, dataclass/asdict hooks or plugins.
 Recorded requires a provider_attempts list and loop mapping, even for a loop that
-made zero calls. Unknown may retain partial actual receipts plus reason and stops
+made zero calls. The loop retains accepted D2 LoopResult fields termination,
+steps_used, model_calls, attempts and mode; each LoopStep retains request_id,
+observation_digest, provider_result, feedback and error. The number of non-null
+returned provider_result entries must equal loop.model_calls, the separate
+provider_attempts count, and evaluator execution.model_calls. Scripted explicit
+not_applicable requires evaluator model_calls=0. A failed call with missing
+returned receipt remains unknown, not complete recorded provenance. Empty loop
+objects never establish actual zero calls. Unknown may retain partial actual receipts plus reason and stops
 further dispatch. Scripted no-provider absence must be an explicit producer
 not_applicable declaration with provider_attempts=[], loop=null and reason; it is
 not inferred from a missing sidecar, and is never measured model evidence.

@@ -79,6 +79,25 @@ MAX_MATRIX_PROVENANCE_BYTES = 64 * 1024 * 1024
 MAX_PROVENANCE_NODES = 8192
 ATTEMPT_FIELDS = {"request", "binding", "current_cost", "source_cost", "raw_usage",
                   "rejected_response", "error", "timings"}
+LOOP_FIELDS = {"termination", "steps_used", "model_calls", "attempts", "mode"}
+LOOP_STEP_FIELDS = {"request_id", "observation_digest", "provider_result", "feedback", "error"}
+
+
+def _complete_loop(loop: dict, attempts: list) -> bool:
+    """Validate actual D2 LoopResult/LoopStep shape and returned call coverage."""
+    if (not LOOP_FIELDS <= set(loop) or type(loop["termination"]) is not str
+            or not loop["termination"].strip() or type(loop["mode"]) is not str
+            or not loop["mode"].strip() or type(loop["steps_used"]) is not int
+            or loop["steps_used"] < 0 or type(loop["model_calls"]) is not int
+            or loop["model_calls"] < 0 or type(loop["attempts"]) is not list):
+        return False
+    for step in loop["attempts"]:
+        if (type(step) is not dict or not LOOP_STEP_FIELDS <= set(step)
+                or type(step["request_id"]) is not str or type(step["error"]) is not str
+                or (step["provider_result"] is not None and type(step["provider_result"]) is not dict)):
+            return False
+    returned = sum(step["provider_result"] is not None for step in loop["attempts"])
+    return returned == loop["model_calls"] == len(attempts)
 
 
 def capture_provenance(value: object, *, source_kind: str, remaining_bytes: int) -> dict:
@@ -186,6 +205,8 @@ def capture_provenance(value: object, *, source_kind: str, remaining_bytes: int)
                 errors.append("loop_receipt_mapping_required")
             elif declared == "recorded" and (type(attempts) is not list or type(loop) is not dict):
                 errors.append("recorded_attempts_and_loop_required")
+            elif declared == "recorded" and not _complete_loop(loop, attempts):
+                errors.append("actual_loop_attempt_coverage_required")
             elif declared == "not_applicable" and (
                     source_kind != "scripted" or attempts != [] or loop is not None or not reason):
                 errors.append("explicit_scripted_no_provider_declaration_required")
@@ -428,6 +449,11 @@ def run_matrix(inputs: dict, *, admission: VerifiedAdmission | None,
             if (execution["run_id"] != lease.run_id or execution["epoch"] != lease.epoch
                     or execution["clock_id"] != lease.clock_id):
                 raise ValueError("execution receipt/reset mismatch")
+            captured = provenance[row_id]
+            actual_calls = (0 if captured["state"] == "not_applicable"
+                            else captured["value"]["loop"]["model_calls"])
+            if actual_calls != execution["model_calls"]:
+                raise ValueError("provider/loop/evaluator model-call coverage mismatch")
             joined = joined_rows([scheduled], {row_id: record})[0]
             records[row_id] = record
             entry.update(status=joined["status"], reason=execution["termination"])
