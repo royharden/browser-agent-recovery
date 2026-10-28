@@ -47,6 +47,10 @@ class InvalidEvidence(Exception):
     """Adapter identity/timing cannot support a recovery decision."""
 
 
+class ReconciliationExpired(CapExceeded):
+    """Visible evidence stayed inconclusive within the fixed recovery window."""
+
+
 def allowed_path(path: str, start_path: str) -> bool:
     """Closed task routes only; no URLs, encoding tricks, admin or other runs.
 
@@ -112,8 +116,10 @@ class Executor:
         now = self._now()
         deadline = min(self.deadline_ns, now + self.action_budget_ns,
                        end_ns if end_ns is not None else self.deadline_ns)
-        if now >= deadline or len(self.steps) >= self.max_actions:
+        if len(self.steps) >= self.max_actions or now >= self.deadline_ns:
             raise CapExceeded("operation or absolute deadline exhausted")
+        if now >= deadline:
+            raise ReconciliationExpired("reconciliation window exhausted")
         return now, deadline
 
     def _read(self, kind: str, end_ns: int | None = None) -> Page | HistoryRead:
@@ -121,10 +127,20 @@ class Executor:
         request_id = uuid4().hex
         outcome = "unknown"
         try:
-            value = (self.port.observe(deadline) if kind == "observe"
-                     else self.port.history(request_id, deadline))
+            try:
+                value = (self.port.observe(deadline) if kind == "observe"
+                         else self.port.history(request_id, deadline))
+            except TimeoutError:
+                if kind != "history":
+                    raise
+                # An unsuccessful public read is ambiguous, never empty history.
+                value = HistoryRead(self.public.run_id, self.public.epoch,
+                                    self.clock_id, request_id, started, self._now(),
+                                    None, None, (), successful=False, complete=False)
             completed = self._now()
             if completed >= deadline:
+                if end_ns is not None and deadline == end_ns < self.deadline_ns:
+                    raise ReconciliationExpired("history exceeded reconciliation window")
                 raise CapExceeded("read exceeded deadline")
             if kind == "observe":
                 if not isinstance(value, Page) or not value.snapshot_epoch:
@@ -171,6 +187,8 @@ class Executor:
     def _wait(self, duration_ns: int, end_ns: int | None = None) -> None:
         started, deadline = self._begin(end_ns)
         if started + duration_ns >= deadline:
+            if end_ns is not None and deadline == end_ns < self.deadline_ns:
+                raise ReconciliationExpired("no further poll fits reconciliation window")
             raise CapExceeded("wait would exhaust absolute deadline")
         outcome = "unknown"
         try:
@@ -290,6 +308,8 @@ class Executor:
                         retried.run_id, retried.epoch, retried.clock_id, retried.response_ns))
                 else:
                     self._wait(self.poll_wait_ns, recovery_end)
+        except ReconciliationExpired as exc:
+            return result("abstained", "AMBIGUOUS_ABSTENTION: " + str(exc))
         except (CapExceeded, TimeoutError) as exc:
             return result("cap_abort", str(exc))
         except InvalidEvidence as exc:
