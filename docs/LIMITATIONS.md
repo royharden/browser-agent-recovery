@@ -122,3 +122,14 @@ authentication, installation or observed behavior. Counted field refills preserv
 the original public payload and native target exposure; no F2/browser run has
 validated them. Partial operation/deadline/cleanup failures remain explicit and
 do not justify free retries or invented completion times.
+
+P7 media source is opt-in and unexecuted. No screenshots, traces, videos, manifests
+or media-qualified results were generated. Private directories and no-follow
+inspection are source intent, not a Windows ACL, hard quota, race-proof native
+writer or hard-preemption receipt. Output must stay outside product checkouts,
+Worktrees and OneDrive. Native recording may retain partial/unreferenced files;
+all such bytes are preserved, never deleted. Unselected success captures likewise
+remain private. A manifest or status failure cannot erase authority receipts or
+claim clean capture; operator results retain explicit errors independently of
+the evaluator's closed media-path list. Sampling requires an actual operator
+outcome and stable paired key, never actor finish or controller acknowledgement.

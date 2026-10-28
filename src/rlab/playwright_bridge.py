@@ -12,6 +12,7 @@ from .browser import BridgeUnavailable, ContextReceipt, MediaStatus
 from .browser_ipc import (BoundSubmission, BrowserAuthorityIPC, InstalledRender,
                           PublicInteraction)
 from .contracts import Intent, Origin, Target
+from .media_capture import MediaCapturePolicy, MediaCaptureSession
 from .ports import PreparedCancellationError, UnboundActionResponse
 from .routing import RoutePolicy
 from .snapshot import Snapshot, referenced_target, validate_snapshot
@@ -37,7 +38,7 @@ _PUBLIC_DOM = r"""() => {
 
 class PlaywrightBridge:
     def __init__(self, ipc: BrowserAuthorityIPC, *, record_interaction,
-                 profile: str = "browser"):
+                 profile: str = "browser", media_policy: MediaCapturePolicy | None = None):
         if not callable(record_interaction):
             raise BridgeUnavailable("actual ordinary interaction recorder required")
         if profile not in {"browser", "browser_peer_in_process"}:
@@ -54,7 +55,30 @@ class PlaywrightBridge:
         self._route_error = ""
         self._closed = False
         self._operation_deadline = None
+        if media_policy is not None and type(media_policy) is not MediaCapturePolicy:
+            raise ValueError("explicit operator media policy required")
+        self._media = MediaCaptureSession(media_policy or MediaCapturePolicy(),
+                                          run_key=self.public.run_id)
+        self._trace_attempted = False
+        self._extra_videos = []
+        self._resources_closed = False
+        self._resource_close_error = None
         self.errors: list[tuple[str, str, str]] = []
+
+    @property
+    def media_manifest(self):
+        """Private operator result; never included in DOM or action feedback."""
+        return self._media.manifest
+
+    @property
+    def media_status(self) -> MediaStatus:
+        return MediaStatus(*self._media.status)
+
+    def finalize_media(self, *, outcome: str = "unknown", sample_key: str | None = None):
+        """Operator outcome/paired sample key only, after resource close attempt."""
+        if not self._resources_closed:
+            raise ValueError("close browser resources before media selection")
+        return self._media.finalize(outcome=outcome, sample_key=sample_key)
 
     def now_ns(self) -> int:
         return self._ipc.now_ns()
@@ -122,8 +146,39 @@ class PlaywrightBridge:
         self._runtime = sync_playwright().start()
         try:
             self._browser = self._runtime.chromium.launch(headless=True, timeout=timeout)
-            self._context = self._browser.new_context(accept_downloads=False,
-                java_script_enabled=False, service_workers="block")
+            self._media.start()
+            media_options = {}
+            if self._media.active and self._media.video_dir is not None:
+                media_options["record_video_dir"] = str(self._media.video_dir)
+            try:
+                self._context = self._browser.new_context(accept_downloads=False,
+                    java_script_enabled=False, service_workers="block", **media_options)
+            except Exception as exc:
+                if not media_options:
+                    raise
+                self._media.note_error("video_context", exc)
+                # No actor has run. A failed optional recording setup may leave
+                # a context in this fresh private browser; close all known partial
+                # contexts before a single nonrecording retry. Preserve all files.
+                partial_contexts = tuple(self._browser.contexts)
+                if len(partial_contexts) > 32:
+                    raise BridgeUnavailable("partial context count unknown; no recording fallback")
+                for partial in partial_contexts:
+                    partial.close()  # a failed stop aborts rather than claiming freshness
+                self._timeout(deadline_ns)
+                self._context = self._browser.new_context(accept_downloads=False,
+                    java_script_enabled=False, service_workers="block")
+                media_options = {}
+            if media_options:
+                self._media.record_started("video")
+            if self._media.active and self._media.trace_path is not None:
+                # Mark before invocation: a partial start still needs stop/diagnostics.
+                self._trace_attempted = True
+                try:
+                    self._context.tracing.start(screenshots=True, snapshots=True, sources=False)
+                    self._media.record_started("trace")
+                except Exception as exc:
+                    self._media.note_error("trace_start", exc)
             self._policy = policy
             self._context.route("**/*", self._guard)
             # Block WebSockets before opening a page (requires preinstalled PW >=1.48).
@@ -132,17 +187,35 @@ class PlaywrightBridge:
             self._page.on("download", self._downloads)
             self._context.on("page", self._reject_extra_page)
             self._timeout(deadline_ns)
-        except Exception:
-            self.close_context()
+        except Exception as exc:
+            self._media.note_error("context_start", exc)
+            try:
+                self.close_context()
+            except Exception:
+                # Preserve the original failed browser operation; cleanup retains
+                # its own operator diagnostics, never a fabricated action result.
+                pass
             raise
         return ContextReceipt(self.public.run_id, self.public.epoch, self.clock_id,
                               "playwright-" + uuid4().hex, True,
-                              MediaStatus(error="trace/video not requested; runtime unqualified"),
+                              self.media_status,
                               profile=self._profile)
 
     def _reject_extra_page(self, page) -> None:
         if page is not self._page:
             self._route_error = "additional page refused"
+            if self._media.active:
+                # Video files remain private even if handle retrieval/inspection
+                # fails. No directory scan or cleanup guesses their actual paths.
+                self._media.note_error("video_extra_page_retained", RuntimeError())
+                try:
+                    video = page.video
+                    if video is not None:
+                        if len(self._extra_videos) >= 31:
+                            raise ValueError("bounded extra-page video handles exceeded")
+                        self._extra_videos.append(video)
+                except Exception as exc:
+                    self._media.note_error("video_handle", exc)
             page.close()
 
     def project_snapshot(self) -> Snapshot:
@@ -351,13 +424,44 @@ class PlaywrightBridge:
         return receipt
 
     def close_context(self) -> None:
+        if self._resources_closed:
+            if self._resource_close_error is not None:
+                raise BridgeUnavailable(self._resource_close_error)
+            return
+        self._resources_closed = True
         self._closed = True
         errors = []
+        video = None
+        if self._page is not None and self._media.active:
+            try:
+                video = self._page.video
+            except Exception as exc:
+                self._media.note_error("video_handle", exc)
+        if self._context is not None and self._trace_attempted:
+            try:
+                self._context.tracing.stop(path=str(self._media.trace_path))
+                self._media.register_completed("trace", self._media.trace_path)
+            except Exception as exc:
+                self._media.note_error("trace_stop", exc)
+        context_closed = False
         for resource, method in ((self._context, "close"), (self._browser, "close"), (self._runtime, "stop")):
             if resource is not None:
                 try:
                     getattr(resource, method)()
+                    if resource is self._context:
+                        context_closed = True
+                        # Playwright completes videos when the context closes.
+                        # Never ask for/claim a completed path before that point.
+                        for completed_video in ([video] if video is not None else []) + self._extra_videos:
+                            try:
+                                self._media.register_completed("video", completed_video.path())
+                            except Exception as exc:
+                                self._media.note_error("video_path", exc)
                 except Exception as exc:
                     errors.append(type(exc).__name__)
+                    self._media.note_error("resource_close", exc)
+        if self._media.active and not context_closed:
+            self._media.note_error("video_close", RuntimeError("context close not completed"))
         if errors:
-            raise BridgeUnavailable("browser cleanup incomplete: " + ",".join(errors))
+            self._resource_close_error = "browser cleanup incomplete: " + ",".join(errors)
+            raise BridgeUnavailable(self._resource_close_error)

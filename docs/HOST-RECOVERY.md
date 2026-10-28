@@ -302,3 +302,39 @@ to TaskHost receipt JSON. Actual action status/time remain exclusively the peer'
 retained terminal receipt. No reload, semantic target search, changed server effect
 or acknowledgement inference follows from this transport-only response. Typed
 cleanup failure is latched before fallible final clock accounting can mask it.
+
+## Opt-in P7 media (r8 source)
+
+MediaCapturePolicy defaults disabled and is supplied only by trusted operator
+composition, never actor input, CLI artifact or profile selector. Its pre-existing
+absolute output root must be outside the product checkout, Worktrees and OneDrive;
+operators additionally list any other product checkout roots to exclude. A fresh
+exclusive private-intent run directory and video directory contain one fixed trace
+name and native video names. Manifest allocation is exclusive/no-follow. Native
+writers do not promise O_EXCL or race-proof enforcement; ACLs, reparse races, disk
+quota and browser API behavior remain qualification work. No file is removed.
+
+Playwright tracing starts on the private context with sources disabled, stops
+before context close, and videos are inspected only after successful context close.
+Recording context setup failure records video diagnostics, closes known partial
+contexts in the fresh browser, and makes one bounded nonrecording context attempt.
+Failure to stop a partial context aborts freshness rather than minting success.
+Trace/manifest/path inspection errors remain media diagnostics; real resource stop
+failure remains latched on repeated close. Seals/attempts/provenance are not replaced
+by capture errors. Already completed artifacts remain individually complete when
+a later video fails; aggregate status becomes partial.
+
+Completed artifact receipts require a nonempty actual regular no-follow file,
+observed stable size and SHA256 under declared inspection budgets. Partial trace
+files can be retained without a completed_path claim. Local monotonic media timing
+is labelled separately from authoritative effect timing. Limits are observed
+inspection/capture budgets, not hard native-writer or disk quotas. MediaStatus and
+ContextReceipt keep their shapes; rich paths/errors live in frozen private manifests.
+
+After session close, an operator finalizes media with actual failure/success/unknown
+and a stable key shared across paired variant/block scope. Failure is always
+selected; success uses SHA256 modulo10; missing outcome/key retains unknown selection
+and all available media. The helper never infers success from finish, acknowledgment,
+arm or favorable outcome. Unselected files stay private and undeleted; sampling
+reduces referenced video, not recorded storage. Unknown/partial captures are not
+retrospectively fabricated into media.

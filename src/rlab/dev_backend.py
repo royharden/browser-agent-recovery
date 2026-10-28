@@ -6,14 +6,59 @@ DOM installation, research freezing, independent truth or model performance.
 """
 from __future__ import annotations
 
-from dataclasses import asdict, fields
+from dataclasses import asdict, dataclass, fields
 import importlib
 import json
 from pathlib import Path
-from typing import Any, Callable, Mapping, Protocol, Sequence
+from typing import Any, Callable, Mapping, Protocol, Sequence, TYPE_CHECKING
 from uuid import uuid4
 
 from .cli import AdmissionPort, FixtureRequest, PortResult
+
+if TYPE_CHECKING:
+    from .media_capture import MediaManifest
+
+
+@dataclass(frozen=True)
+class OperatorMediaResult:
+    """Private result kept separately from closed evaluator/provenance records."""
+    run_key: str
+    manifest: MediaManifest | None
+    references: tuple[str, ...] = ()
+    errors: tuple[str, ...] = ()
+
+
+def _finalize_operator_media(session: Any, run_key: str, record: dict, *,
+                             report_root: Path | None, outcome_provider: Callable | None,
+                             sample_key: str | None) -> OperatorMediaResult:
+    errors, outcome, manifest, references = [], "unknown", None, ()
+    if outcome_provider is not None:
+        try:
+            outcome = outcome_provider(_detached(record))
+            if type(outcome) is not str or outcome not in {"success", "failure", "unknown"}:
+                raise ValueError("explicit operator media outcome required")
+        except Exception as exc:
+            outcome = "unknown"
+            errors.append("outcome:" + type(exc).__name__[:128])
+    try:
+        from .media_capture import MediaManifest
+        hook = getattr(session, "finalize_media", None)
+        if hook is None:
+            return OperatorMediaResult(run_key, None, (), tuple(errors + ["media_unavailable"]))
+        manifest = hook(outcome=outcome, sample_key=sample_key)
+        if manifest is not None and type(manifest) is not MediaManifest:
+            manifest = None
+            raise TypeError("fixed private MediaManifest required")
+        if manifest is not None and report_root is not None:
+            references = manifest.evaluator_references(report_root)
+            if type(references) is not tuple or len(references) > 33:
+                raise ValueError("bounded immutable media references required")
+        elif manifest is not None and manifest.requested:
+            errors.append("media_report_root_missing")
+    except Exception as exc:
+        errors.append("media:" + type(exc).__name__[:128])
+        references = ()
+    return OperatorMediaResult(run_key, manifest, references, tuple(errors))
 
 
 class DevelopmentOrchestrationPort(Protocol):
@@ -229,14 +274,26 @@ class DevelopmentMatrixPort:
                  profile: str = "canonical", cleared_prompt_profiles: tuple[str, ...] = (),
                  provider_factory: Callable[[dict], Any] | None = None,
                  action_port_factory: Callable[[Any, dict, int], Any] | None = None,
-                 provider_limits: Any = None):
+                 provider_limits: Any = None,
+                 session_factory: Callable | None = None,
+                 media_report_root: Path | None = None,
+                 media_outcome_provider: Callable[[dict], str] | None = None,
+                 media_sample_keys: Mapping[str, str] | None = None):
         self._authority, self._admission, self._profile = authority, admission, profile
         self.clock_id = authority.clock_id
         self._clearance = tuple(cleared_prompt_profiles)
         self._provider_factory, self._action_factory = provider_factory, action_port_factory
         self._provider_limits = provider_limits
+        self._session_factory = session_factory
+        self._media_report_root, self._media_outcome = media_report_root, media_outcome_provider
+        self._media_keys = dict(media_sample_keys or {})
+        self._media_results: dict[str, OperatorMediaResult] = {}
         self._active: dict | None = None
         self._halted = False
+
+    @property
+    def media_results(self) -> tuple[OperatorMediaResult, ...]:
+        return tuple(self._media_results.values())
 
     def now_ns(self) -> int:
         if self._authority.clock_id != self.clock_id:
@@ -258,7 +315,7 @@ class DevelopmentMatrixPort:
         schedule, meta = self._selection(row)
         reason = None
         admission = self._admission
-        if self._halted or self._active is not None:
+        if self._halted or self._active is not None or len(self._media_results) >= 4000:
             reason = "backend_cleanup_or_lifecycle_unavailable"
         elif (not isinstance(admission, facade.VerifiedAdmission)
               or admission.state != "PASS"
@@ -353,7 +410,7 @@ class DevelopmentMatrixPort:
                                lag=HistoryLag(meta["lag_ns"]))
         self._active["task"] = task
         started_ns = self.now_ns()
-        session = create_development_session(
+        session = (self._session_factory or create_development_session)(
             task, "http://127.0.0.1:20000", max_actions=config["max_actions"],
             max_probes=config["max_probes"], run_budget_ns=config["run_timeout_ns"],
             reconciliation_budget_ns=meta["reconcile_budget_ns"], absolute_deadline_ns=deadline)
@@ -480,6 +537,13 @@ class DevelopmentMatrixPort:
                                 "actions": receipt["actions"], "model_calls": calls,
                                 "failures": [error] if error else []},
                   "cost": cost, "reads": receipt["reads"], "media": []}
+        # Capture/manifest errors never invalidate a seal, erase provenance or
+        # inject fields into D3's closed record. All rich diagnostics stay here.
+        media = _finalize_operator_media(
+            session, lease.schedule_id, record, report_root=self._media_report_root,
+            outcome_provider=self._media_outcome, sample_key=self._media_keys.get(lease.schedule_id))
+        self._media_results[lease.schedule_id] = media
+        record["media"] = list(media.references)
         return facade.SealedRun(lease.schedule_id, lease, _detached(record), _detached(provenance))
 
     def close(self, lease: Any) -> None:
@@ -535,12 +599,24 @@ class DevelopmentBackend:
         builder_ids: Sequence[str] = (), trusted_ids: Sequence[str] = (),
         db_root: Path | None = None,
         orchestration: DevelopmentOrchestrationPort | None = None,
+        session_factory: Callable | None = None,
+        media_report_root: Path | None = None,
+        media_outcome_provider: Callable[[dict], str] | None = None,
+        media_sample_key: str | None = None,
     ):
         self._admission = admission
         self._document = document
         self._expected_hashes = dict(expected_hashes or {})
         self._builder_ids, self._trusted_ids = tuple(builder_ids), tuple(trusted_ids)
         self._db_root, self._orchestration = db_root, orchestration
+        self._session_factory = session_factory
+        self._media_report_root, self._media_outcome = media_report_root, media_outcome_provider
+        self._media_key = media_sample_key
+        self._media_results: list[OperatorMediaResult] = []
+
+    @property
+    def media_results(self) -> tuple[OperatorMediaResult, ...]:
+        return tuple(self._media_results)
 
     def _gate(self) -> PortResult | None:
         if (self._admission is None or self._document is None
@@ -597,6 +673,8 @@ class DevelopmentBackend:
         if blocked is not None:
             return blocked
         self._validate(request)
+        if len(self._media_results) >= 4000:
+            return PortResult("unavailable", "Operator media receipt cap reached; nothing executed")
         if request.profile == "canonical":
             return PortResult("unavailable", "Canonical Linux/browser hooks unavailable; nothing executed")
         root = _private_root(self._db_root)
@@ -631,7 +709,7 @@ class DevelopmentBackend:
                 fault=None if request.condition == "clean" else FaultPlan(request.condition),
                 lag=HistoryLag(request.lag_ns),
             )
-            session = create_development_session(
+            session = (self._session_factory or create_development_session)(
                 task, "http://127.0.0.1:20000", max_actions=request.max_actions,
                 max_probes=request.max_probes, run_budget_ns=request.horizon_ns,
             )
@@ -678,6 +756,21 @@ class DevelopmentBackend:
             "media": {"trace": "not_requested", "video": "not_requested"},
             "private_seal": "seal.json" if seal is not None else None,
         }
+        media = _finalize_operator_media(
+            session, task.public.run_id if task is not None else directory.name, record,
+            report_root=self._media_report_root, outcome_provider=self._media_outcome,
+            sample_key=self._media_key)
+        self._media_results.append(media)
+        if session is not None:
+            try:
+                record["media"] = asdict(session.media_status)
+            except Exception:
+                record["media"] = {"trace": "unavailable", "video": "unavailable",
+                                   "error": "operator media status unavailable"}
+        # Private manifest diagnostics are operator results, never actor content.
+        # A metadata-only error does not alter execution/unknown/seal decisions.
+        record["media_references"] = list(media.references)
+        record["media_errors"] = list(media.errors)
         _write(directory / "record.json", record)
         return PortResult("failed" if unknown else "complete",
                           "Private authored development record; no oracle/model/isolation acceptance",

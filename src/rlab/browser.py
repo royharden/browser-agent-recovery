@@ -234,6 +234,25 @@ class BrowserSession:
                 "reads": [asdict(read) for read in self._executor.history_reads],
                 "start_ns": self._executor.started_ns}
 
+    @property
+    def media_manifest(self):
+        """Private operator media result, separate from actor/effect receipts."""
+        return getattr(self._adapter.bridge, "media_manifest", None)
+
+    @property
+    def media_status(self) -> MediaStatus:
+        return getattr(self._adapter.bridge, "media_status", MediaStatus(
+            "unavailable", "unavailable", "bridge has no media capture lifecycle"))
+
+    def finalize_media(self, *, outcome: str = "unknown", sample_key: str | None = None):
+        """Explicit operator selection; finish/ACK never supplies goal truth."""
+        if not getattr(self, "_closed", False):
+            raise ValueError("close session before operator media finalization")
+        finalize = getattr(self._adapter.bridge, "finalize_media", None)
+        if finalize is None:
+            return None
+        return finalize(outcome=outcome, sample_key=sample_key)
+
     def start(self, *, request_id: str | None = None,
               deadline_ns: int | None = None) -> InteractionReceipt:
         return self.act(Action("goto", path=self.public.start_path),
@@ -255,10 +274,17 @@ class BrowserSession:
 
     def close(self) -> None:
         """Operator stop; no claim of OS worker/preemption qualification."""
+        if getattr(self, "_close_error", None) is not None:
+            raise BridgeUnavailable("prior browser stop failed; trusted cleanup required") from self._close_error
         if not getattr(self, "_closed", False):
-            self._adapter.bridge.close_context()
-            self._closed = True
-        self._finished = True
+            try:
+                self._adapter.bridge.close_context()
+            except Exception as exc:
+                self._close_error = exc
+                raise
+            finally:
+                self._closed = True
+                self._finished = True
 
     def act(self, action: Action, arm: Arm = "R0", *, request_id: str | None = None,
             deadline_ns: int | None = None) -> InteractionReceipt | ExecutionResult:

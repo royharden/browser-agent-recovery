@@ -17,6 +17,7 @@ from .contracts import HistoryRead, Intent, Origin
 from .driver import DevelopmentTask
 from .executor import Arm, ExecutionResult
 from .host import LocalTaskPort
+from .media_capture import MediaCapturePolicy
 from .ports import ActionReceipt, InteractionReceipt
 from .routing import RoutePolicy
 from .snapshot import Snapshot, referenced_target, validate_snapshot
@@ -56,6 +57,7 @@ def create_browser_peer_composition(task: DevelopmentTask, origin: str, *,
                                     context_capability: object,
                                     control_timeout_ns: int = 1_000_000_000,
                                     max_requests: int = 4096,
+                                    media_policy: MediaCapturePolicy | None = None,
                                     **session_limits: int) -> BrowserPeerComposition:
     """Fixed opt-in in-process framed peer/browser composition, source only.
 
@@ -110,7 +112,7 @@ def create_browser_peer_composition(task: DevelopmentTask, origin: str, *,
 
     ipc = BrowserAuthorityIPC(peer.public, peer.clock_id, FramedBrowserChannel(peer))
     bridge = PlaywrightBridge(ipc, record_interaction=record_interaction,
-                               profile="browser_peer_in_process")
+                               profile="browser_peer_in_process", media_policy=media_policy)
     session = BrowserSession(bridge, origin, allow_convenience=True, **session_limits)
     return BrowserPeerComposition(session, peer, bridge,
                                   BoundBrowserPeerHTTP(peer, context_capability))

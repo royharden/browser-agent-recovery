@@ -213,3 +213,17 @@ consumes existing controller budgets and retains sequential Step outcomes before
 mutation dispatch, including failed/partial operations. Refills during preparation
 are local browser commands, not fabricated authoritative ordinary/server receipts.
 Unknown completion and pending cleanup continue to halt without hidden retries.
+
+MediaCapturePolicy/Session/Manifest are operator-only. Raw absolute paths, private
+roots, file digests, outcomes and diagnostics do not enter actor observations or
+ContextReceipt. MediaStatus retains only bounded statuses/error. Disabled capture
+allocates nothing. Enabled capture owns exclusive private-intent directories;
+no-follow regular-file inspection verifies actual completed paths after close.
+The native writer/race/ACL/quota boundary is still external and unqualified.
+
+Backend media finalization follows stop/seal decisions and never rewrites them.
+Matrix six-key records contain only safe relative media paths; rich status/error
+receipts remain separate typed operator results/private manifests, not extra
+provenance fields. Trace ZIP is referenced through the actual manifest JSON;
+manifest failure produces no invented JSON link. Failure-video/success-sample
+selection is operator-only and retains all unselected/unknown files without cleanup.

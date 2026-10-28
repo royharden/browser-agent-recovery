@@ -14,6 +14,12 @@ recording, independent DOM installation observation, context-bound HTTP dispatch
 and budgeted public-field preservation. It supplies no listener, authentication,
 OS isolation, hard preemption or observed browser/HTTP qualification.
 
+Trace/video capture is disabled by default. An explicit private operator policy
+can capture through the existing Playwright bridge and retain typed private media
+manifests; failures and deterministic paired-key success sampling affect references
+only. No media has been generated or deleted, and no capture/quota/ACL qualification
+is established by this source.
+
 The standard-library Python 3.12+ foundation includes public contracts, a
 transactional SQLite authority, original F1 order/F2 ticket/F3 delete development
 adapters and HTML, visible-history verification, semantic re-resolution, and

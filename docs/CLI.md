@@ -218,3 +218,19 @@ profile is convenience, and session construction performs an in-process authorit
 clock bootstrap. Neither helper nor CLI has been executed under Dirty Mode.
 Mounting/authenticating the fixed HTTP dispatcher and all canonical/runtime gates
 remain separate. Source-schedule output retains its source-only meaning.
+
+Opt-in media is an operator composition setting (`media_policy`), not a new actor
+or CLI file/profile loader. Default capture remains not_requested. Operators retain
+the peer HTTP dispatcher and inject the corresponding session factory into the
+development backend/matrix port. An independently supplied outcome callback and
+paired/block sample-key mapping control selection; absent outcome stays unknown.
+`media_results` returns private typed OperatorMediaResult entries independently of
+the closed evaluator envelope and provenance.
+
+An explicit private report root is required for media references. Evaluator media
+contains only actual completed safe-relative manifest.json/video paths. Raw trace.zip
+is retained with status/size/digest inside the private manifest because the accepted
+evaluator does not permit ZIP links. Manifest-write/reference failures remain typed
+operator diagnostics with no invented link. Output and manifest directories must
+remain private; this source uploads/publishes/copies/deletes no media. No media flags
+or files have been exercised in Dirty Mode.
