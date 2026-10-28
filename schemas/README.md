@@ -1,40 +1,22 @@
 # Generated public schemas (later activation)
 
-No JSON artifacts have been generated here. Version 2.1.0 export SOURCE is
-src/rlab/public_schema.py, with scripts/export_contracts.py as the operator entry
-point. See [derivation and limitations](../docs/CONTRACTS.md).
+No JSON artifacts have been generated here. Version2.1.0 export SOURCE is
+src/rlab/public_schema.py, with scripts/export_contracts.py as its later operator
+entry point. See [derivation and limits](../docs/CONTRACTS.md).
 
-Canonical dataclasses and closed validators remain implementation truth. Future
-output carries source/generator hashes and named closed record definitions.
-Private task specifications, hidden answers, authority bundles and seeds are
-excluded. The missing canonical public event envelope is explicitly unsupported.
+Canonical public_records defines receipts,Step,ExecutionResult and their aliases.
+Old ports receipt definition names remain references to the same closed shapes.
+Page.controls is retained. Private BrowserPeerComposition/peer/IPC/context controls,
+authority bundles,task specifications,expected effects,hidden answers and seeds
+are excluded. The canonical PUBLIC event envelope remains explicitly unsupported.
 
-Generation and conformance checks are deferred. A schema is not data admission,
-a measured result, worker isolation or instrument acceptance.
+Accepted9b52b2a plus D4's exact browser_receipt_peer declaration has a clear affected
+static scan:40 modules,19 public roots,20 transitive,zero findings/unknowns,exit0.
+All three operator browser modules stay forbidden public dependencies. This is not
+an installed-wheel,runtime,identity,isolation,authentication or admission result.
 
-Packaging discovery explicitly excludes evaluation/heldout/held_out packages
-under rlab and their descendants, with implicit package-data inclusion disabled.
-The prior combined scan's codec/controller policy finding was repaired by the
-accepted public_records extraction. Static guidance was clear at a72e502:
-37 modules, 19 public roots, 20 transitive modules, zero findings/unknowns, exit 0.
-public_records is explicitly PUBLIC; no actor closure exemption was added.
-No wheel was built or installed, and schema
-JSON has not been generated. Future
-distribution of generated resources needs an explicit packaging decision.
-
-Version 2 derives the newly required Page.controls field from accepted canonical
-source. Final source/generator hashes are produced only on later export against
-the final reviewed checkout; no research freeze or independent receipt exists.
-
-Version 2.1 derives receipts, Step and ExecutionResult from public_records.py.
-Old ports receipt definition names remain references to the same canonical
-definitions, preserving their closed wire shapes. Python class module/source
-pins changed; actual runtime identity/conformance remains unverified. Future
-browser/IPC/source-schedule source enters the inventory only after acceptance.
-
-The accepted 05e209f client/schedule delta now has a clean affected scan:
-39 modules, 19 public roots, 20 transitive modules, zero findings/unknowns, exit 0.
-Exact operator browser_ipc/playwright_bridge entries remain forbidden public
-dependencies; their private IPC records are not actor schema definitions.
-The next browser_receipt_peer delta is not yet accepted or classified. Schema
-version/mapping remains 2.1; no output or runtime qualification was generated.
+Source/generator hashes wait later export against final accepted bytes/line endings;
+no research freeze,source schedule artifact or independent receipt was minted.
+Schema generation/conformance,class identity,serialization and actual wheel contents
+remain deferred. Packaging excludes private evaluation/heldout packages and disables
+implicit package data; distributing generated resources needs an explicit decision.

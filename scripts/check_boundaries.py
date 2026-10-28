@@ -46,12 +46,14 @@ TRUSTED_ROOTS = {
     "rlab.trusted_bridge": "trusted development/session bridge and action-port adapter",
     "rlab.browser_ipc": "operator-only browser authority receipt capability client",
     "rlab.playwright_bridge": "operator-only fixed Playwright browser adapter",
+    "rlab.browser_receipt_peer": "operator-only retained authority receipt peer and private framing",
 }
 FORBIDDEN_MODULES = frozenset({
     "rlab.cli", "rlab.authority", "rlab.driver", "rlab.host", "rlab.executor",
     "rlab.browser", "rlab.ports", "rlab.faults", "rlab.lag", "rlab.admission",
     "rlab.admin_socket", "rlab.dev_backend", "rlab.supervisor", "rlab.trusted_bridge",
     "rlab.browser_ipc", "rlab.playwright_bridge",
+    "rlab.browser_receipt_peer",
 })
 FORBIDDEN_PARTS = frozenset({
     "authority", "evaluation", "heldout", "held_out", "admin", "admin_socket",

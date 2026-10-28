@@ -1,8 +1,7 @@
 # Public and trusted interfaces
 
 Dirty Mode source construction; runtime unverified. API inventory baseline:
-05e209f4f1c85f62d907916340bc684c207cab6f, with D4 public-record schema synchronization.
-Canonical definitions and validators
+9b52b2af1a4ba2ced9b03e1f7b0ccc75cf8d5b82. Canonical definitions and validators
 own detailed behavior; this map is not instrument or independent acceptance.
 
 | Layer | Canonical source | Boundary |
@@ -46,10 +45,8 @@ The accepted public-record extraction removes the prior codec-to-controller
 dependency path: agents.session_codec now reads canonical public_records.
 Legacy ports/executor exports alias those exact classes; class __module__ now
 names rlab.public_records. No wire field/default/decorator changed in extraction.
-The public-record sync checker declared public_records PUBLIC and reported 37 modules,
-19 public roots and 20 transitive modules, zero findings/unknowns, exit 0. No
-actor/worker/controller exemption was added. This is a static source result,
-not an installed-wheel or runtime isolation result. See [schema mapping](CONTRACTS.md).
+The checker declares public_records PUBLIC without actor/worker/controller
+exceptions. See [schema mapping and current scan](CONTRACTS.md).
 
 Canonical activation still has MISSING privileged implementation:
 SourceProfile.require_activation and OwnedWorker.start refuse. No-argument
@@ -58,24 +55,57 @@ the accepted bounded public-channel control loop and typed owner/client source.
 This does not provision descriptors, start isolated workers or qualify enforcement.
 The in_process_convenience adapter implements none of those privileged mechanisms.
 
-Accepted browser_ipc.BrowserAuthorityIPC and playwright_bridge.PlaywrightBridge
-now provide fixed operator-side receipt-client/browser adapter source. The checker
-declares these two exact trusted ENTRY modules and forbids public imports of them;
-no actor exception was added. The combined scan reports 39 modules, 19 public
-roots, 20 transitive modules, zero findings/unknowns and exit 0. Actual transport,
-authenticated receipt peer, OS isolation and browser effects remain unqualified.
-The next browser_receipt_peer implementation is NOT accepted at this pin; it
-receives no speculative checker declaration or clean-source claim.
+Accepted BrowserAuthorityIPC, PlaywrightBridge and BrowserReceiptPeer now provide
+both application sides of the fixed browser receipt protocol. The checker declares
+their three exact operator modules trusted ENTRY roots AND forbidden public
+dependency targets. The combined scan reports 40 modules, 19 public roots,
+20 transitive modules, zero findings/unknowns and exit 0. Actual authenticated
+connections/context, OS isolation and browser effects remain unprovided or unqualified.
+
+The fixed source callsites are now joined:
+
+- PlaywrightBridge.interact calls the actual-event recorder before IPC interaction
+  retrieval; create_browser_peer_composition binds that recorder to
+  BrowserReceiptPeer.record_interaction and its retained authority-clock record.
+- The peer's installed_snapshot observer calls PlaywrightBridge.project_snapshot,
+  a DOM-only read without authority clock/IPC reentry into the serialized peer.
+- BoundBrowserPeerHTTP calls peer.dispatch_http with the captured context
+  capability; TaskHost's receipt_sink retains the real LocalTaskPort terminal
+  receipt before HTTP response delivery. A listener/context authentication is
+  not supplied by this composition.
+- Executor's counted prepare/observe/refill path reaches prepare_submission on
+  the submitted native ref's CURRENT form. F2 Body is restored from immutable
+  original public intent; readonly quantity is compared, not filled. Operations
+  consume shared caps/deadlines and retain partial Step provenance. This adds no
+  common semantic target search for R0/R1 and fabricates no interaction receipt.
+- Private framing bounds the length prefix and fixed DTOs. The explicit
+  browser_peer_in_process profile is convenience wiring. Constructing the composed
+  BrowserSession itself performs a framed clock bootstrap, so it was not invoked
+  as a no-effect construction check.
+
+See HOST-RECOVERY's latest peer-composition section for this accepted join;
+BROWSER-RECEIPT-PEER's earlier D2 handoff list describes its package boundary
+before those D1 callsites were added, not the current missing-source inventory.
 
 The accepted D3 evaluation.source_schedule producer is now consumed by fixed
 CLI/backend source. It returns ready/pending/refused based on independent full-input
 anchors and typed admission. This is an implemented source path; no artifact was
 generated, and no research freeze or independent receipt exists. Final source
 pins await final accepted byte composition/line endings.
+
+Canonical privileged infrastructure is still UNPROVIDED: preauthenticated inherited
+connections and listener/body/context binding, inherited-FD provisioning, distinct
+UID/GID launch, namespaces/mounts/ACL/egress, whole-descendant termination, separate
+scorer access and hard preemption of blocking code. Qualification probes and external
+independent admission/rights/prompt inputs are also UNPROVIDED or UNQUALIFIED.
+These are not supplied by typed callbacks, object identity, framing or static scans.
+Media remains an explicit not-requested/error status: actual trace/video collection
+source is not wired in PlaywrightBridge.open_context. No captured media is claimed.
 Follow the owning documents for details:
 
 - [Host/recovery](HOST-RECOVERY.md): executor, browser and authority seams.
 - [Trusted boundary](TRUSTED-BOUNDARY.md): refused entrypoints and offline pipe source.
+- [Receipt peer](BROWSER-RECEIPT-PEER.md): bounded private protocol and retained terminal evidence.
 - [CLI](CLI.md): missing ports, command dispatch and trusted report loading.
 - [Admission](ADMISSION.md): external anchors and independent gates.
 - [Offline provider](OFFLINE-PROVIDER.md): request/cost binding and public action loop.
