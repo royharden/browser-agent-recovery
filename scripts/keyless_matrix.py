@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
+import signal
 import sys
 from typing import Callable
 
@@ -72,8 +73,18 @@ def main(argv: list[str] | None = None, *, port: MatrixRunPort | None = None,
     # Reserve output BEFORE potential dispatch so a preexisting artifact cannot
     # cause execution with nowhere to retain its receipt. Preserve partial file.
     with output.open("x", encoding="utf-8") as handle:
-        result = run_matrix(inputs, admission=decision, port=port)
-        handle.write(canonical(result) + "\n")
+        stopping = False
+
+        def request_stop(signum, frame):
+            nonlocal stopping
+            stopping = True
+
+        previous = signal.signal(signal.SIGINT, request_stop)
+        try:
+            result = run_matrix(inputs, admission=decision, port=port, stop=lambda: stopping)
+            handle.write(canonical(result) + "\n")
+        finally:
+            signal.signal(signal.SIGINT, previous)
     print("Private matrix artifact retained; runtime qualification remains unverified.")
     return 0
 

@@ -16,6 +16,7 @@ from .matrix import validate_matrix
 from .metrics import joined_rows
 from .oracle import validate_spec
 from .report import build_report
+from .report_html import media_path
 
 
 @dataclass(frozen=True)
@@ -134,9 +135,12 @@ def run_matrix(inputs: dict, *, admission: VerifiedAdmission | None,
     used_runs, used_namespaces, used_contexts = set(), set(), set()
     dispatched = 0
     last_now, matrix_deadline = None, None
+    deadline_clock_id = port.clock_id if gate is None else None
 
     def now() -> int:
         nonlocal last_now
+        if port.clock_id != deadline_clock_id:
+            raise ValueError("backend deadline clock domain changed")
         value = port.now_ns()
         if type(value) is not int or value < 0 or (last_now is not None and value < last_now):
             raise ValueError("invalid/regressing backend deadline clock")
@@ -211,6 +215,10 @@ def run_matrix(inputs: dict, *, admission: VerifiedAdmission | None,
             if set(record) != {"seal", "spec", "execution", "cost", "reads", "media"}:
                 raise ValueError("closed evaluator record required")
             record["spec"] = _copy(specs[row_id])
+            if not isinstance(record["media"], list):
+                raise ValueError("media receipt must be a list")
+            for path in record["media"]:
+                media_path(path)
             execution = record["execution"]
             if (execution["run_id"] != lease.run_id or execution["epoch"] != lease.epoch
                     or execution["clock_id"] != lease.clock_id):
@@ -225,7 +233,8 @@ def run_matrix(inputs: dict, *, admission: VerifiedAdmission | None,
                 raise ValueError("evidence/clock/action cap/offline accounting violation")
         except Exception as error:
             gate = "harness_unknown_stop"
-            entry.update(status="harness_unknown", reason=gate)
+            entry.update(status="harness_unknown" if row_id in records else "not_executed",
+                         reason=gate)
             entry["errors"].append(type(error).__name__ + ": " + str(error))
             # Preserve every usable attempted record but invalidate its seal when
             # identity/time/cap cannot be trusted; raw sidecar retains original.

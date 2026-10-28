@@ -70,7 +70,8 @@ max_probes <=40, max_model_calls <=16, run_timeout_ns <=180000000000,
 total_timeout_ns <=720000000000000. Mock/authored calls still count as attempts;
 offline-only capability forbids paid/network dispatch, not mock model-call counting.
 Backend must enforce steps/probes and synchronous reset/execute/close deadlines;
-this wrapper cannot preempt blocking code. Runner checks clock regression, elapsed
+this wrapper cannot preempt blocking code. Runner pins the deadline clock domain
+and checks clock regression, elapsed
 deadline, action/model-call accounting and fresh IDs, stopping on unknown cleanup
 or integrity. `stop()` prevents further rows; all remainder stays scheduled.
 Ordinary backend aborts with complete sealed evidence stay scorable.
@@ -85,7 +86,10 @@ PASS as unverified and cannot dispatch without trusted verifier/backend injectio
 The result contains the accepted evaluator report, every scheduled row's lifecycle,
 raw returned records (including failures), matrix metadata, input hash and an
 envelope hash. Evaluator absence remains not_executed; attempted reset/execute with
-unknown evidence becomes harness_unknown. Current offline known_zero must be an
+unknown evidence becomes harness_unknown. Invalid media is rejected inside the
+per-row handler; raw response remains private and evaluator gets an unknown fallback,
+so a malformed media receipt cannot discard the full matrix report.
+Current offline known_zero must be an
 explicit producer receipt; absent cost never becomes free. Authored/replay source
 cost stays a separate provenance field and cannot be erased by zero current spend.
 Raw errors/spec-bearing output is private; no media copied/fetched or external URLs
@@ -104,7 +108,10 @@ No API key placeholder is required. All input paths and output parent are explic
 and outside product tree; output file is exclusively reserved before dispatch.
 Existing files/symlinks refuse overwrite. Operator supplies private directory ACLs;
 filesystem races and real isolation need later qualification. An unhandled fatal
-error leaves the reserved file, never removes prior evidence. Durable streaming
+error leaves the reserved file, never removes prior evidence. SIGINT requests
+cooperative stop: the current bounded backend operation finishes, then remaining
+rows are retained as not_executed; it does not forcibly preempt Python/backend code.
+Durable streaming
 checkpointing on process interruption is a later integration requirement.
 
 Anchors are exactly `{pins, input_sha256, admission_sha256}` with canonical JSON
