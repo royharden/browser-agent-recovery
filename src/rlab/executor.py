@@ -13,7 +13,7 @@ from uuid import uuid4
 from .contracts import FailedAction, HistoryRead, Intent, Origin, Target
 from .actions import Action, validate_action
 from .ports import (ActionReceipt, BrowserPort, InteractionPort, InteractionReceipt,
-                    PreparedCancellationError)
+                    PreparedCancellationError, UnboundActionResponse)
 from .recovery import Reconciliation, resolve
 from .views import Page
 
@@ -41,6 +41,7 @@ class ExecutionResult:
     reason: str = ""
     cancelled_request_ids: tuple[str, ...] = ()
     pending_cleanup_request_ids: tuple[str, ...] = ()
+    uncertain_request_ids: tuple[str, ...] = ()
 
 
 class CapExceeded(Exception):
@@ -109,6 +110,8 @@ class Executor:
         self._used: set[str] = set()
         self._prepared_request: str | None = None
         self._cleanup_error: str | None = None
+        self._action_error: str | None = None
+        self._unbound_request_id: str | None = None
 
     def _now(self) -> int:
         now = self.port.now_ns()
@@ -124,8 +127,8 @@ class Executor:
         self._cleanup_error = "prepared cancellation failed: trusted reconciliation required"
 
     def _begin(self, end_ns: int | None = None) -> tuple[int, int]:
-        if self._cleanup_error is not None:
-            raise InvalidEvidence(self._cleanup_error)
+        if self._cleanup_error is not None or self._action_error is not None:
+            raise InvalidEvidence(self._cleanup_error or self._action_error)
         now = self._now()
         deadline = min(self.deadline_ns, now + self.action_budget_ns,
                        end_ns if end_ns is not None else self.deadline_ns)
@@ -265,6 +268,14 @@ class Executor:
                 # lost mutation confirmation eligible for history/retry.
                 self._remember_cleanup_failure(exc)
                 raise
+            except UnboundActionResponse:
+                # The request may still be in flight. Latch before fallible
+                # accounting and never cancel a possibly issued mutation here.
+                self._unbound_request_id = request_id
+                self._action_error = "authoritative action completion unavailable; trusted reconciliation required"
+                if self._prepared_request == request_id:
+                    self._prepared_request = None
+                raise
             except Exception as exc:
                 if self._prepared_request == request_id:
                     self._prepared_request = None
@@ -316,10 +327,11 @@ class Executor:
     def execute(self, intent: Intent, arm: Arm) -> ExecutionResult:
         if arm not in {"R0", "R1", "R2", "R3", "R23"}:
             raise ValueError("unknown recovery arm")
-        if self._cleanup_error is not None:
+        if self._cleanup_error is not None or self._action_error is not None:
             pending = (self._prepared_request,) if self._prepared_request is not None else ()
+            uncertain = (self._unbound_request_id,) if self._unbound_request_id is not None else ()
             return ExecutionResult(intent.root_intent_id, arm, "harness_unknown", (), (),
-                                   self._cleanup_error, (), pending)
+                                   self._cleanup_error or self._action_error, (), pending, uncertain)
         if self._captured.get(intent.root_intent_id) != intent or intent.root_intent_id in self._used:
             raise ValueError("use an unconsumed executor-captured intent")
         self._used.add(intent.root_intent_id)
@@ -329,7 +341,8 @@ class Executor:
 
         def result(state: Disposition, reason: str = "") -> ExecutionResult:
             cancelled: tuple[str, ...] = ()
-            if self._prepared_request is not None and self._cleanup_error is None:
+            if (self._prepared_request is not None and self._cleanup_error is None
+                    and self._action_error is None):
                 pending = self._prepared_request
                 try:
                     # Trusted non-effect cleanup is not a browser operation;
@@ -342,10 +355,14 @@ class Executor:
                     self._prepared_request = None
             if self._cleanup_error is not None:
                 state, reason = "harness_unknown", self._cleanup_error
+            elif self._action_error is not None:
+                state, reason = "harness_unknown", self._action_error
             pending_cleanup = ((self._prepared_request,)
                                if self._prepared_request is not None else ())
+            uncertain = ((self._unbound_request_id,)
+                         if self._unbound_request_id is not None else ())
             return ExecutionResult(intent.root_intent_id, arm, state, tuple(receipts),
-                                   tuple(self.steps[first_step:]), reason, cancelled, pending_cleanup)
+                                   tuple(self.steps[first_step:]), reason, cancelled, pending_cleanup, uncertain)
 
         try:
             guarded = arm in {"R3", "R23"}
@@ -395,11 +412,13 @@ class Executor:
         except PreparedCancellationError as exc:
             self._remember_cleanup_failure(exc)
             return result("harness_unknown", self._cleanup_error)
+        except UnboundActionResponse:
+            return result("harness_unknown", self._action_error or "authority response unbound")
         except (CapExceeded, TimeoutError) as exc:
-            if self._cleanup_error is not None:
+            if self._cleanup_error is not None or self._action_error is not None:
                 # Failed cleanup wins even if final clock accounting raised a
                 # timeout. Do not query that failed clock again or retry cleanup.
-                return result("harness_unknown", self._cleanup_error)
+                return result("harness_unknown", self._cleanup_error or self._action_error)
             # Adapter wait/observe methods can raise at their post-call check.
             # Preserve the recovery disposition even when that lower layer did
             # not raise our specialized exception (e.g. OS sleep overshoot).

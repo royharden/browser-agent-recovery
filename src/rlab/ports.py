@@ -20,6 +20,13 @@ class PreparedCancellationError(RuntimeError):
         super().__init__("prepared cancellation failed for request " + request_id)
 
 
+class UnboundActionResponse(RuntimeError):
+    """Transport did not establish authoritative terminal action completion."""
+    def __init__(self, request_id: str):
+        self.request_id = request_id
+        super().__init__("authoritative completion unavailable for request " + request_id)
+
+
 @dataclass(frozen=True)
 class ActionReceipt:
     request_id: str
@@ -57,7 +64,9 @@ class BrowserPort(Protocol):
     metadata out of band. Worker-controlled headers or client clocks cannot do so.
     cancel_action raises PreparedCancellationError on failed/unconfirmed cleanup;
     prepare_action and execute must preserve that exception when cleanup fails.
-    Other execute returns/exceptions consume or successfully cancel preparation.
+    UnboundActionResponse requires a terminal uncertain-request halt, never
+    cancellation/retry based on a presumed terminal response. Other execute
+    returns/exceptions consume or successfully cancel preparation.
     """
     public: PublicTask
     clock_id: str

@@ -168,3 +168,13 @@ actions. F2 scripted fill needs a public Body textbox from the future DOM snapsh
 hook; the foundation's button-only projection is insufficient and is not silently
 upgraded to a successful fixture. Provider/admission and real browser/worker hooks
 remain unavailable until separately implemented and qualified.
+
+An exception from `TrustedBridge.execute` is an `UnboundActionResponse`, unless
+it is the separately typed pending-cancellation failure. A browser timeout does
+not establish terminal server response timing. The controller records the request
+under `uncertain_request_ids`, halts as `harness_unknown`, and does not synthesize
+an ActionReceipt, probe history, cancel the possibly issued mutation or retry it.
+Only an actual identity-bound authoritative terminal receipt can enter R2/R23
+reconciliation. The halt is latched before fallible final clock accounting and
+blocks further controller operations; the facade also terminates on unknown/cap.
+Trusted operator reconciliation of in-flight requests is a later required hook.

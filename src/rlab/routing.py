@@ -9,6 +9,9 @@ class RoutePolicy:
     start_path: str
 
     def __post_init__(self) -> None:
+        if (not isinstance(self.origin, str) or any(c in self.origin for c in "%\\?#")
+                or any(ord(c) < 33 for c in self.origin)):
+            raise ValueError("canonical origin required")
         parsed = urlsplit(self.origin)
         if (parsed.scheme != "http" or parsed.hostname not in {"localhost", "127.0.0.1"}
                 or parsed.port is None or parsed.username or parsed.password
@@ -24,7 +27,7 @@ class RoutePolicy:
                   download: bool = False, upload: bool = False) -> str:
         if (not isinstance(url, str) or len(url) > 768 or type(method) is not str
                 or redirect or download or upload
-                or any(c in url for c in "%\\") or any(ord(c) < 33 for c in url)
+                or any(c in url for c in "%\\?#") or any(ord(c) < 33 for c in url)
                 or url.startswith("//")):
             raise ValueError("unsafe browser request")
         parsed = urlsplit(url)
