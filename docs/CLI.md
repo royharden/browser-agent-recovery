@@ -9,9 +9,9 @@ No installation or environment setup is part of this milestone.
 | Command | Source behavior | Current default |
 | --- | --- | --- |
 | tasks | List original F1 order, F2 ticket, F3 delete | Metadata only |
-| run | Invoke trusted fixture host for one public task/policy | Unavailable, exit 3 |
-| matrix | Delegate selected public task's policy matrix to trusted fixture host | Unavailable, exit 3 |
-| freeze | Delegate schedule freezing; write returned private JSON | Unavailable, exit 3 |
+| run | External admission gate, then selected single-run development profile | PENDING, exit 3 |
+| matrix | External admission gate, then injected D3 orchestration | PENDING, exit 3 |
+| freeze | External admission gate, then injected D3 source-schedule producer | PENDING, exit 3 |
 | report | Build JSON or static HTML through fixed operator evaluator | Unavailable if evaluator absent |
 | verify-report | Verify against separately selected trusted anchors | Unavailable if evaluator absent |
 | admit | Delegate manifest decision to trusted admission port | PENDING/unavailable, exit 3 |
@@ -21,24 +21,56 @@ run, matrix, and freeze default to --mode fixture --task F1 --policy R0
 closed to F1/F2/F3; policies are R0/R1/R2/R3/R23. Actions and probes are bounded
 to 1..40, horizon to 1..180000000000ns and development seed to 0..999. The
 trusted host must also enforce the shared executor's operation-specific limits.
-The matrix port owns expansion across R0/R1/R2/R3/R23 for the selected task;
-policy is the baseline selection. --mode live always refuses execution,
+The injected D3 matrix port owns schedule expansion; D1 does not generate a
+competing schedule. Missing matrix/freeze orchestration returns unavailable
+after admission. --mode live always refuses execution after the admission gate,
 including when a provider port is injected. No command imports a user script,
 loads a plugin from an artifact, or exposes arbitrary shell/JS/network tools.
 
-FixtureRequest contains only public selection/caps/seed. FixturePort declares
+FixtureRequest contains public selection/caps/seed plus operator profile,
+condition and history lag. The latter controls stay in the trusted backend and
+are never added to actor observations. FixturePort declares
 run(request), matrix(request), and freeze(request), each returning a
-PortResult(status, detail, artifact=None) with status complete/pending/unavailable.
+PortResult(status, detail, artifact=None) with status complete/pending/unavailable/failed.
 ProviderPort.readiness() is a declared future seam. Trusted Python embedding may call
 main(argv, ports=OperatorPorts(...)). No command-line backend loader exists.
-The normal console entry point injects no ports and never fabricates execution
-success. The future fixture producer must use the public action/snapshot path;
-these protocols do not implement a solver or hidden expected data.
+The normal console entry point injects no admission producer and remains
+PENDING. No receipt, trusted ID or PASS is fabricated. There is no command-line
+backend loader. The authored backend reuses run_scripted through the public
+session surface; it does not inspect private expected answers.
 
-The future fixture producer must require a real admission PASS before executing
-any fixture or live mode; explicit FAIL skips every execution mode. There is no
-joined fixture/admission/provider loop yet. Injecting a fixture port is a trusted
-integration responsibility and must not bypass the producer's admission gate.
+run/matrix/freeze accept --manifest, --expected-hashes, --builder-ids and
+--trusted-ids using the same independent anchor rules as admit below. All are
+required for execution, together with an injected AdmissionPort. CLI gating
+precedes custom fixture invocation, backend creation and live refusal. Explicit
+FAIL returns exit 2 and skips every mode; PENDING returns exit 3. The backend
+also gates direct trusted embedding calls before runtime imports or DB creation.
+
+--profile canonical is the default and returns unavailable after admission:
+actual Linux/browser enforcement hooks are not joined. Only explicit
+--profile in_process_convenience selects the single-run source path. Condition
+is --condition clean|EXPIRED_VIEW|STALE_ID|INTERRUPTED_ACTION, default clean;
+--lag-ns is 0 or 2000000000, default 0. Condition/lag configure DevelopmentTask
+on the trusted side and are not passed to run_scripted. A fixed loopback origin
+in this embedding labels snapshots; it does not bind a port or start a server.
+
+Convenience execution requires --db-root naming an existing absolute private
+directory outside OneDrive and the product tree, without symlink/junction
+ancestors. Every run exclusively creates a UUID directory and reserves its DB
+without overwrite. Roots require operator-controlled private ACLs; lexical
+checks and mode 0700 are not Linux ACL/network qualification. No paths are
+deleted. The logical session must close before Authority.seal. No OS worker is
+launched in this profile. Private record.json and seal.json remain in that
+directory; authority seal contents are never actor observations. Scorer truth
+is not supplied, and no oracle PASS is produced. Failures retain unknown/error
+records where storage remains available. Current authored offline call cost
+alone is known zero; an unattempted call stays unknown. Models remain unmeasured.
+
+DevelopmentOrchestrationPort declares matrix(request) and freeze(request).
+It is injected into DevelopmentBackend only by trusted embedding. D3 must
+retain every scheduled row, including unknown, errors and not-run remainder,
+and stop on unknown hard failures. Freeze is a source-schedule artifact, never
+a research freeze or independent receipt. That producer is currently unjoined.
 
 Admission uses the provisional injected facade only; no changing admission module
 is imported or copied:
@@ -103,7 +135,7 @@ release/redaction decision. Standard output emits status and output location,
 not private report bodies or fixture payloads.
 
 Exit 0 means metadata/command completion or anchor verification only; exit 3
-means pending/unavailable; exit 2 means refused inputs or integration errors
+means pending/unavailable; exit 2 means admission FAIL, refused inputs or integration errors
 (argparse also uses 2). Readiness stays unknown, validation runtime_unverified,
 and models not_yet_measured. Default unavailable paths report not_run. Future
 trusted port completion is not a model/runtime PASS. Private exception messages

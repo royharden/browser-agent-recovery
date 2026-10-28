@@ -34,9 +34,12 @@ or ambiguous controls and unavailable version evidence stop submission.
 Ticket creation additionally requires a unique visible `textbox` named `Body`
 in the `general` row and an acknowledged fill. HTML containing a textarea is
 insufficient unless the public snapshot exposes its actionable textbox target.
-The current development page target list supplies buttons only; F2 therefore
-remains unavailable through that target list until integration supplies the
-textbox. The solver does not pretend a field was filled or bypass the form.
+The development Page now exposes Body textbox controls separately from its
+mutation-button target list. The explicit in-process development bridge merges
+those public controls into its bounded snapshot and projects filled text safely.
+This is source projection, not real DOM installation or browser qualification.
+Other bridges without a Body control still fail unavailable. The solver does
+not pretend a missing field was filled.
 
 The solver issues one original mutation action and delegates recovery to the
 selected executor arm. It does not implement hidden families or inspect private
@@ -58,3 +61,27 @@ All arms and fault/lag combinations, original-field retention, stale/remapped
 references, ambiguous history, duplicate/no-op effects, caps/deadlines, host
 rejection paths and bridge/process protections still need authorized runtime
 qualification. Source review cannot replace independent evaluation or admission.
+
+## Explicit development and canonical profiles
+
+The opt-in in_process_convenience bridge/backend reuses Authority/DevelopmentTask,
+public scripted actions, task-owned lag history and synchronous authority-clock
+terminal receipts. No real browser context, OS worker or sandbox is implied.
+Default canonical operation remains unavailable; missing external admission
+inputs are PENDING and explicit FAIL skips every execution mode. Nothing has run.
+
+Supervisor/worker/private Unix admin source declares validated roots/identities,
+fixed launch intent and bounded private messages. Canonical start refuses until
+privileged launcher, filesystem/egress/namespace enforcement, descendant stop,
+browser IPC, separate scorer access and denial probes actually join. Development
+admin sealing and logical session.close are not those qualification receipts.
+
+TrustedActionPortAdapter explicitly forwards caller request correlation and
+absolute deadlines, capped by the existing executor budgets. Caller IDs cannot
+choose run/epoch/root/origin; root intent remains trusted-generated. Reused or
+malformed IDs refuse, and missing response metadata never gets a fabricated time.
+D2 PublicObservation/ActionFeedback mapping requires an explicit accepted codec;
+None is unavailable, and no implicit BrowserSession compatibility is asserted.
+D3 owns matrix scheduling/runner; this backend implements one run and delegates
+matrix/freeze only through an injected orchestration seam. These joined producer
+bindings and all runtime checks remain deferred.
