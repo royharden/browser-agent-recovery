@@ -75,6 +75,88 @@ stub has no pricing, budget admission, restart durability or dynamic evidence
 claim and does not substitute for S3 or any paid accounting qualification.
 # Public action-loop seam
 
+## Offline broker and inherited-pipe codec source (r4)
+
+OfflineBroker(provider,*,model_id,profile,limits,expected_requests=(),codec=BrokerCodec(),
+max_requests=16) owns fixed built-in AuthoredMockProvider or ReplayProvider configuration.
+profile must exactly match authored_mock/strict_replay. Live, custom/plugin and
+unconfigured providers are refused. Worker data cannot choose a model, endpoint,
+provider path, handler, schema or limits. This module opens no pipe/process/network.
+
+Operator-only authorize_request(ProviderRequest) installs an immutable expected
+request made from an actual PUBLIC observation and externally cleared prompt.
+It verifies fixed model/limits/schema and rejects duplicate IDs. This method and
+the broker/provider objects MUST NOT be exported to the worker. The worker may
+call only handle(mapping), or handle_frame(bytes) through the future D1 transport.
+Without a trusted unused binding, dispatch fails closed; a worker-supplied hash
+alone never establishes an authentic observation or approved prompt.
+
+The worker request has exactly version=rlab.offline.request.v1, request_id,
+observation_digest, schema_sha256, messages. Schema digest is SHA256 of canonical
+action_schema(); messages are ordinary closed role/content objects. Broker builds
+the ProviderRequest using its own model/schema/limits, then compares the complete
+record to the trusted binding. Binding is consumed before its single provider
+call, including thrown/unknown outcomes; no automatic retry is possible.
+
+Response has version=rlab.offline.response.v1, request_id, observation_digest,
+request_binding_sha256, schema_sha256, profile, model_id, ok, result, error.
+Unavailable identity/binding is null, never manufactured. Result contains action,
+error, raw_usage, usage_state, provider_request_id, actual_model_id, timings,
+current_cost, source_cost, mode, attempt_index, rejected_response_sha256. Actions
+omit absent fields. Broker independently applies output/wait limits. Provider
+errors keep their result; broker rejection/unknown exceptions have null result.
+Missing result/usage/timing/cost is unknown, not proof of zero or success. Current
+valid offline ProviderResult cost is known_zero; replay source cost stays separate.
+Operator attempts retain full immutable ProviderResult even when wire output is
+too large; the worker receives a bounded error and optional rejection digest.
+Returned dictionaries are detached from retained canonical operator records.
+
+BrokerCodec encodes canonical UTF-8 JSON with a four-byte unsigned big-endian
+body length. Default body cap262144 bytes; operator-configurable8192..1048576.
+decode requires exactly one complete frame, matching length, canonical object,
+no duplicate keys, noninteger/nonfinite numbers or trailing data. It performs no
+I/O. Future D1 pipe code must check the prefix cap BEFORE allocating/reading its
+body, assemble one bounded frame and stop on closure. Invalid/malformed frames
+count toward the same max_requests cap as valid calls. Once closed, BrokerClosed
+refuses further acceptance; transport must stop reading, not loop on rejections.
+
+BrokerAttempt records accepted calls/errors as canonical request/response plus
+optional original ProviderResult and bounded bad-frame digest. Oversized raw
+frames have no content digest, explicitly unknown. Operator configuration and
+request table are bounded; source assumes one serialized owner. No authentication,
+actual inherited-pipe isolation, admission, timing, worker denial or durable paid
+accounting is established. LedgerStub remains non-durable and live-refusing. The
+action/supervisor owner supplies authority-clock deadlines and hard preemption;
+broker forwards only existing provider timing and invents no authority timestamps.
+
+## Original prompt profiles and clearance source (r4)
+
+BASE_PROMPT_PROFILE and RP_PROMPT_PROFILE are original local wording. RP uses the
+refresh-on-transient-error method described in the adopted plan; it copies no
+WAREX text and is not a benchmark reproduction or licence-admission claim. Base
+R0/R1/R2/R3/R23 shares one instruction without history/reconciliation/semantic
+wrapper logic. RP adds refresh-on-error only. No private schedules/answers or
+family-specific instructions enter messages. Schema and caller caps are equal.
+
+PromptProfile.descriptor_json/digest bind wording, public message contract,
+eligibility and action schema. select_prompt_profile(arm,source_kind,stage,
+cleared_prompt_profiles=...) requires operator-retained EXTERNALLY cleared exact
+hashes; source computes hashes but never self-clears them. RP eligibility is only
+(mock,mock), (mock,pilot), (live,pilot); unavailable/main/heldout combinations remain
+not_executed with the requested arm retained. Other live labels do not enable any
+live transport. Actual model/access/licence/research gates are separate and pending.
+
+run_offline adds keyword args arm='R0', source_kind='mock', stage='mock',
+cleared_prompt_profiles=None. Old call syntax remains valid; absent clearance now
+returns LoopResult('not_executed',0,0,...) BEFORE clock/observation/provider access.
+D1/D3 must forward actual trusted clearance; never substitute an arm or derive
+clearance from a worker claim. D3 preserves its scheduled row as not_executed,
+not an omitted arm or measured clean result. render_prompt_messages returns a
+fresh detached tuple of role/content dicts; ProviderRequest stores immutable
+canonical JSON. Public caps/feedback are included identically across arms and
+oversized requests are rejected without truncation. No profile, loop, broker,
+codec, mock or replay has been executed in this construction phase.
+
 Committed D1 interface reconciliation (1898202): provider Action.operation is
 explicitly mapped to rlab.actions.Action.kind by rlab.agents.map_action(). Fields
 are selected, not passed as an unchecked raw tool dictionary. The D1 closed parser
