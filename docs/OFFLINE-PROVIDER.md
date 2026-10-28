@@ -75,6 +75,25 @@ stub has no pricing, budget admission, restart durability or dynamic evidence
 claim and does not substitute for S3 or any paid accounting qualification.
 # Public action-loop seam
 
+Committed D1 interface reconciliation (1898202): provider Action.operation is
+explicitly mapped to rlab.actions.Action.kind by rlab.agents.map_action(). Fields
+are selected, not passed as an unchecked raw tool dictionary. The D1 closed parser
+and validate_action enforce their stricter ref160/path512/wait3000 limits; provider
+limits may be wider, so unsupported values are rejected without clamping.
+Click requires a caller-supplied ORIGINAL PUBLIC rlab.actions.Mutation. No mutation
+intent is guessed from the reference or generated from private expected effects.
+rlab.agents.observation_from_snapshot() uses D1 validate_snapshot and serializes
+ordinary body/targets/url/served_version into a detached PublicObservation.
+
+BrowserSession.observe() returns Snapshot with no caller deadline argument;
+BrowserSession.act(Action,arm) does not accept the loop request ID/deadline. Thus
+it is NOT assumed to implement ActionPort directly. D1's trusted backend must
+forward the exact caller request ID, absolute authority-clock deadline and bound
+receipt metadata, rather than manufacture ActionFeedback from client timing.
+The mapping module delays D1 imports until called so existing offline records
+remain importable on the older base; actual mapping requires the D1 source merge.
+No browser/loop execution or joined compatibility is claimed.
+
 `rlab.agents.run_offline(provider, port, *, model_id, provider_limits=Limits(),
 limits=LoopLimits(), request_id_factory=None) -> LoopResult` consumes these offline
 ports only. `LoopLimits` caps steps at40, model calls at16 and authority-clock
