@@ -133,9 +133,33 @@ exit 0 (`static_scope_clear`). It adds no actor/worker/controller exemption.
 This closes the reported codec dependency-policy path at the accepted source
 composition, not the OS/process/installed-wheel/identity qualification gates.
 
-D1 browser_ipc/playwright_bridge and D3 source_schedule remain unaccepted work
-at this pin. Exact later operator-entry candidates are `rlab.browser_ipc` and
+D1 browser_ipc/playwright_bridge and D3 source_schedule were unaccepted work
+at that pin. Exact later operator-entry candidates were `rlab.browser_ipc` and
 `rlab.playwright_bridge`; inspect accepted bytes before declaring them and forbid
 public reach into privileged code. Neither name is added speculatively now.
 Schema generation, class identity checks, final pins/line endings and runtime
 qualification remain deferred; the public event-envelope gap stays unsupported.
+
+## Accepted browser clients and schedule join (05e209f)
+
+At accepted `05e209f4f1c85f62d907916340bc684c207cab6f`, browser_ipc.py and
+playwright_bridge.py physically exist as operator-side receipt client and fixed
+browser adapter source. The checker now declares exactly `rlab.browser_ipc` and
+`rlab.playwright_bridge` trusted ENTRY modules and forbidden dependencies of all
+public roots. It does not exempt worker/actor imports or relax transitive closure.
+The affected actual-composition scan reports 39 modules, 19 public roots,
+20 transitive modules, zero violations/unknowns, exit 0 (`static_scope_clear`).
+This is static intent only, not trusted transport, DOM, browser or OS evidence.
+
+Canonical public_records/schema 2.1 mapping and legacy receipt references are
+unchanged. No private browser IPC dataclasses are added to actor schemas. New
+source includes explicit worker config/capability control composition and the
+fixed consumer of accepted evaluation.source_schedule; no-argument worker launch
+and privileged canonical activation still refuse. A source schedule requires
+independent anchors/full-input admission and is not a research acceptance receipt.
+
+`rlab.browser_receipt_peer` is the next unaccepted implementation at this pin.
+It has no advance classification, source acceptance or clean scan claim. A later
+accepted source delta must be inspected before updating exact layer declarations.
+Final generated schema/source hashes still wait final byte composition and line
+endings; no export, schedule artifact or qualification was executed here.

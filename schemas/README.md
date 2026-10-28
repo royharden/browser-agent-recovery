@@ -15,7 +15,7 @@ a measured result, worker isolation or instrument acceptance.
 Packaging discovery explicitly excludes evaluation/heldout/held_out packages
 under rlab and their descendants, with implicit package-data inclusion disabled.
 The prior combined scan's codec/controller policy finding was repaired by the
-accepted public_records extraction. Current static guidance is clear at a72e502:
+accepted public_records extraction. Static guidance was clear at a72e502:
 37 modules, 19 public roots, 20 transitive modules, zero findings/unknowns, exit 0.
 public_records is explicitly PUBLIC; no actor closure exemption was added.
 No wheel was built or installed, and schema
@@ -30,4 +30,11 @@ Version 2.1 derives receipts, Step and ExecutionResult from public_records.py.
 Old ports receipt definition names remain references to the same canonical
 definitions, preserving their closed wire shapes. Python class module/source
 pins changed; actual runtime identity/conformance remains unverified. Future
-browser/IPC/source-schedule source is not included until separately accepted.
+browser/IPC/source-schedule source enters the inventory only after acceptance.
+
+The accepted 05e209f client/schedule delta now has a clean affected scan:
+39 modules, 19 public roots, 20 transitive modules, zero findings/unknowns, exit 0.
+Exact operator browser_ipc/playwright_bridge entries remain forbidden public
+dependencies; their private IPC records are not actor schema definitions.
+The next browser_receipt_peer delta is not yet accepted or classified. Schema
+version/mapping remains 2.1; no output or runtime qualification was generated.
