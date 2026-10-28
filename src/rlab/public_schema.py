@@ -10,18 +10,22 @@ import ast
 import hashlib
 from pathlib import Path
 
-# v2 adds Page.controls to the complete serialized record after accepted source
-# composition. No v1/v2 artifacts have been generated during construction.
-SCHEMA_VERSION = "2.0.0"
+# v2.1 derives relocated public records and retains old receipt definition names
+# as references. No schema artifacts have been generated during construction.
+SCHEMA_VERSION = "2.1.0"
 # Explicit public record allowlist. In particular, authority is never parsed.
 RECORDS = {
     "contracts": ("PublicTask", "Target", "Intent", "Transition", "HistoryRead", "FailedAction"),
     "actions": ("Mutation", "Action"),
     "snapshot": ("Snapshot",),
-    "ports": ("ActionReceipt", "InteractionReceipt"),
+    "public_records": ("ActionReceipt", "InteractionReceipt", "Step", "ExecutionResult"),
     "views": ("Page",),
 }
-ALIASES = {"contracts": ("Operation", "Origin"), "actions": ("ActionKind",)}
+ALIASES = {"contracts": ("Operation", "Origin"), "actions": ("ActionKind",),
+           "public_records": ("Arm", "Disposition",)}
+# Schema-fragment compatibility only, not a second copy of the record shapes.
+LEGACY_DEFINITIONS = {"ports.ActionReceipt": "public_records.ActionReceipt",
+                      "ports.InteractionReceipt": "public_records.InteractionReceipt"}
 MAX_SOURCE_BYTES = 256 * 1024
 
 
@@ -148,6 +152,10 @@ def public_schema(checkout: Path) -> dict[str, object]:
     projection = _Projection(checkout)
     definitions = {f"{module}.{name}": projection.record(module, name)
                    for module, names in RECORDS.items() for name in names}
+    for legacy, canonical in LEGACY_DEFINITIONS.items():
+        if canonical not in definitions or legacy in definitions:
+            raise UnsupportedShape("invalid legacy definition mapping")
+        definitions[legacy] = {"$ref": "#/$defs/" + canonical}
     own = _source(checkout, "src/rlab/public_schema.py")
     return {
         "$schema": "https://json-schema.org/draft/2020-12/schema",

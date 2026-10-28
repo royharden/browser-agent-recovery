@@ -1,7 +1,7 @@
 # Public and trusted interfaces
 
 Dirty Mode source construction; runtime unverified. API inventory baseline:
-7ef166751b1a64f36dfddedd7287938373128643. Canonical definitions and validators
+a72e502788824d0ccd3e411642d84091697155a2. Canonical definitions and validators
 own detailed behavior; this map is not instrument or independent acceptance.
 
 | Layer | Canonical source | Boundary |
@@ -10,7 +10,7 @@ own detailed behavior; this map is not instrument or independent acceptance.
 | Closed actions | rlab.actions | Action, Mutation, parse_action, validate_action; kind-dependent wire fields |
 | Public observation | rlab.snapshot, rlab.views | Snapshot/validate_snapshot; Page separates mutation targets from controls such as the Body textbox |
 | Recovery | rlab.recovery | verify, resolve, Reconciliation; visible evidence only |
-| Bound receipts | rlab.ports | ActionReceipt, InteractionReceipt; trusted identity/timing supplied by adapter |
+| Public receipts/results | rlab.public_records | ActionReceipt, InteractionReceipt, Step, ExecutionResult, Arm and Disposition; trusted adapter still supplies identity/timing |
 | Offline model seam | rlab.providers, rlab.agents | Authored mock/replay, request/result records, bounded loop and explicit action mapping |
 | Operator commands | rlab.cli | Injected trusted ports and fixed optional evaluation loader; never an actor dependency |
 
@@ -41,11 +41,14 @@ JoinedDevelopmentOrchestration delegates through trusted embedding. Execution
 requires genuine external admission, prompt clearance and operator factories.
 These are source joins, not observed execution or canonical browser isolation.
 
-Current static guidance reports a dependency-policy violation: agents.__init__
-eagerly loads agents.session_codec, which imports trusted executor/ports modules.
-Package initialization makes this closure reachable from public agent modules
-and the worker. This owner reconciliation item has not been exempted; no runtime
-isolation breach is established by the scan. See [checker status](CONTRACTS.md).
+The accepted public-record extraction removes the prior codec-to-controller
+dependency path: agents.session_codec now reads canonical public_records.
+Legacy ports/executor exports alias those exact classes; class __module__ now
+names rlab.public_records. No wire field/default/decorator changed in extraction.
+The corrected checker declares public_records PUBLIC and reports 37 modules,
+19 public roots and 20 transitive modules, zero findings/unknowns, exit 0. No
+actor/worker/controller exemption was added. This is a static source result,
+not an installed-wheel or runtime isolation result. See [schema mapping](CONTRACTS.md).
 
 Canonical activation has MISSING implementation: SourceProfile.require_activation,
 OwnedWorker.start and worker.main refuse; privileged launch, isolated browser IPC
@@ -54,6 +57,10 @@ in_process_convenience adapter does not implement these canonical paths.
 JoinedDevelopmentOrchestration.freeze refuses instead of producing a source
 schedule artifact. Final source pins await final accepted bytes and line endings;
 no schema generation, actual freeze or independent receipt was performed.
+At this accepted pin the next D1 browser_ipc/playwright_bridge and D3
+source_schedule packages remain IN PROGRESS, not accepted modules in this map.
+Possible later trusted-entry declarations must wait their accepted source delta;
+no advance checker exemption or source/runtime success is implied.
 Follow the owning documents for details:
 
 - [Host/recovery](HOST-RECOVERY.md): executor, browser and authority seams.

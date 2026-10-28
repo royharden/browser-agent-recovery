@@ -1,14 +1,15 @@
 # Public contract projection
 
-Version 2.0.0 is source-only. No schema files or runtime results were generated.
+Version 2.1.0 is source-only. No schema files or runtime results were generated.
 rlab.public_schema derives definitions using stdlib AST parsing, without evaluating
 annotations or importing selected types. scripts/export_contracts.py is a later
 activation entry point; it was not executed during Dirty Mode.
 
 The sole allowlist is public_schema.RECORDS: public task, target, intent,
 transition/history, failed action, driver action/mutation, snapshot, development
-page and bound action/interaction receipts. Only fixed contracts.py, actions.py,
-snapshot.py, views.py and ports.py plus generator bytes are read. No arbitrary
+page, bound action/interaction receipts and execution result/step records. Only
+fixed contracts.py, actions.py, snapshot.py, views.py and public_records.py plus
+generator bytes are read. No arbitrary
 module/type/plugin loader or recursive source discovery exists.
 
 Each dataclass maps to a closed object in $defs under module.ClassName. Every
@@ -20,7 +21,7 @@ missing/duplicate classes, unsupported declarations/inheritance or recursive ali
 abort export. Unknown shapes never become permissive objects.
 
 The bundle root deliberately rejects every instance. Consumers select an explicit
-fragment, for example urn:rlab:public-records:2.0.0#/$defs/contracts.PublicTask,
+fragment, for example urn:rlab:public-records:2.1.0#/$defs/contracts.PublicTask,
 registering the bundle as a resource with a JSON Schema 2020-12 validator.
 Tuple-to-array conversion remains the serializer's obligation.
 
@@ -42,7 +43,7 @@ Line-ending changes affect hashes.
 Later, with a reviewed trusted package installation matching the checkout:
 
 ```text
-python scripts/export_contracts.py --checkout <reviewed-checkout> > <private-output>/public-records-v2.json
+python scripts/export_contracts.py --checkout <reviewed-checkout> > <private-output>/public-records-v2.1.json
 ```
 
 Do not run that command in this Dirty phase. Later validation must exercise export,
@@ -76,7 +77,7 @@ It is not an installed-wheel, runtime isolation or independent acceptance result
 Wheel build/content inspection and final combined-source reconciliation remain
 deferred; the public event-envelope gap remains explicitly unsupported.
 
-## Combined-source reconciliation
+## Prior combined-source reconciliation (7ef1667)
 
 Accepted base `7ef166751b1a64f36dfddedd7287938373128643` adds `Page.controls`:
 the complete record now requires a separate tuple of ordinary public controls,
@@ -103,5 +104,38 @@ executor also imports trusted ports. Counts include repeated paths from differen
 public roots. D2/INT must reconcile the public-record versus trusted-code seam,
 for example by relocating the record definitions or trusted codec boundary under
 a separately owned grant. D4 does not modify that implementation or exempt it.
-This is a declared static-policy failure, not a demonstrated runtime vulnerability
-or a reason to call the full application complete.
+That was a declared static-policy failure, not a demonstrated runtime vulnerability
+or a reason to call the full application complete. The accepted repair and current
+checker result follow; those historical findings are not the current scan status.
+
+## Accepted public-record synchronization (a72e502)
+
+The canonical frozen ActionReceipt, InteractionReceipt, Step and ExecutionResult
+classes now live in `rlab.public_records`, together with Arm/Disposition literal
+aliases. `ports`/`executor` export the exact same classes; field/default/decorator
+shapes did not change in extraction. Their Python class module and source hashes
+did change. No runtime import, identity or serialization experiment was performed.
+
+Version 2.1 derives all four classes and both aliases from public_records.py,
+including ExecutionResult's request/cancellation/uncertainty fields. Existing
+`ports.ActionReceipt` and `ports.InteractionReceipt` schema definition names remain
+as references to their canonical `public_records.*` definitions. These are schema
+fragment compatibility names, not a manually maintained second wire shape or
+runtime alias verifier. Consumers of the old definitions retain the same closed
+record fields; Step/ExecutionResult and canonical receipt names are additive.
+The source hash inventory now binds public_records.py instead of trusted ports.py.
+Complete-record and canonical wire/semantic validator requirements remain intact.
+
+On accepted `a72e502788824d0ccd3e411642d84091697155a2`, the corrected checker
+declares rlab.public_records explicitly PUBLIC. It reports 37 scanned modules,
+19 public roots, 20 transitive modules, zero violations and zero unresolved,
+exit 0 (`static_scope_clear`). It adds no actor/worker/controller exemption.
+This closes the reported codec dependency-policy path at the accepted source
+composition, not the OS/process/installed-wheel/identity qualification gates.
+
+D1 browser_ipc/playwright_bridge and D3 source_schedule remain unaccepted work
+at this pin. Exact later operator-entry candidates are `rlab.browser_ipc` and
+`rlab.playwright_bridge`; inspect accepted bytes before declaring them and forbid
+public reach into privileged code. Neither name is added speculatively now.
+Schema generation, class identity checks, final pins/line endings and runtime
+qualification remain deferred; the public event-envelope gap stays unsupported.
