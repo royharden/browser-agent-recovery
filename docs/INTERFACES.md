@@ -1,7 +1,7 @@
 # Public and trusted interfaces
 
 Dirty Mode source construction; runtime unverified. API inventory baseline:
-9b52b2af1a4ba2ced9b03e1f7b0ccc75cf8d5b82. Canonical definitions and validators
+f57099f16de021c776d367afcc1c00ef966a70e3. Canonical definitions and validators
 own detailed behavior; this map is not instrument or independent acceptance.
 
 | Layer | Canonical source | Boundary |
@@ -58,7 +58,8 @@ The in_process_convenience adapter implements none of those privileged mechanism
 Accepted BrowserAuthorityIPC, PlaywrightBridge and BrowserReceiptPeer now provide
 both application sides of the fixed browser receipt protocol. The checker declares
 their three exact operator modules trusted ENTRY roots AND forbidden public
-dependency targets. The combined scan reports 40 modules, 19 public roots,
+dependency targets. Operator-only media_capture has the same entry/dependency
+classification. The combined scan reports 41 modules, 19 public roots,
 20 transitive modules, zero findings/unknowns and exit 0. Actual authenticated
 connections/context, OS isolation and browser effects remain unprovided or unqualified.
 
@@ -99,8 +100,24 @@ UID/GID launch, namespaces/mounts/ACL/egress, whole-descendant termination, sepa
 scorer access and hard preemption of blocking code. Qualification probes and external
 independent admission/rights/prompt inputs are also UNPROVIDED or UNQUALIFIED.
 These are not supplied by typed callbacks, object identity, framing or static scans.
-Media remains an explicit not-requested/error status: actual trace/video collection
-source is not wired in PlaywrightBridge.open_context. No captured media is claimed.
+Opt-in P7 media lifecycle source is now wired into PlaywrightBridge and trusted
+session/backend composition; capture defaults disabled. MediaStatus and ContextReceipt
+keep their shapes, and no private capture policy/artifact/manifest/result type enters
+actor schemas. Playwright tracing starts with sources disabled, stops before context
+close, and video completion is inspected after successful context close. Completed
+receipts require actual nonempty regular no-follow files with observed stable size
+and SHA256 under declared inspection budgets; partial/error/unavailable/not-requested
+states stay distinct. No trace, video or manifest was generated here.
+
+Rich paths, errors and trace ZIP metadata stay in private manifests/operator results.
+The evaluator receives only actual completed safe-relative JSON manifest/video refs
+under an explicit private report root; ZIP is not a supported evaluator link. Failed,
+partial and unselected bytes are retained without deletion. Actual operator failure
+selects media; success uses the stable paired key's SHA256 modulo 10 bucket. This is
+nominal deterministic selection, not an observed 10% sample or a storage reduction;
+unknown outcome/key retains uncertainty and available media. Report verification
+covers reported metadata integrity, not the current raw ZIP/video bytes or their
+privacy. Native writer, ACL/race, disk quota and runtime behavior remain unqualified.
 Follow the owning documents for details:
 
 - [Host/recovery](HOST-RECOVERY.md): executor, browser and authority seams.
