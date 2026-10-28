@@ -126,6 +126,12 @@ class Executor:
         self._prepared_request = failure.request_id
         self._cleanup_error = "prepared cancellation failed: trusted reconciliation required"
 
+    def _remember_unbound_response(self, request_id: str) -> None:
+        self._unbound_request_id = request_id
+        self._action_error = "authoritative action completion unavailable; trusted reconciliation required"
+        if self._prepared_request == request_id:
+            self._prepared_request = None
+
     def _begin(self, end_ns: int | None = None) -> tuple[int, int]:
         if self._cleanup_error is not None or self._action_error is not None:
             raise InvalidEvidence(self._cleanup_error or self._action_error)
@@ -271,10 +277,7 @@ class Executor:
             except UnboundActionResponse:
                 # The request may still be in flight. Latch before fallible
                 # accounting and never cancel a possibly issued mutation here.
-                self._unbound_request_id = request_id
-                self._action_error = "authoritative action completion unavailable; trusted reconciliation required"
-                if self._prepared_request == request_id:
-                    self._prepared_request = None
+                self._remember_unbound_response(request_id)
                 raise
             except Exception as exc:
                 if self._prepared_request == request_id:
@@ -285,20 +288,33 @@ class Executor:
             else:
                 if self._prepared_request == request_id:
                     self._prepared_request = None
-            completed = self._now()
-            if (not isinstance(receipt, ActionReceipt)
-                    or (receipt.request_id, receipt.run_id, receipt.epoch, receipt.clock_id) != (
-                        request_id, self.public.run_id, self.public.epoch, self.clock_id)
-                    or not started <= receipt.response_ns <= completed
-                    or receipt.status not in {"acknowledged", "failed", "unchanged", "unknown"}):
-                raise InvalidEvidence("mutation receipt identity/timing invalid")
+            try:
+                completed = self._now()
+                valid = (isinstance(receipt, ActionReceipt)
+                         and (receipt.request_id, receipt.run_id, receipt.epoch, receipt.clock_id) == (
+                             request_id, self.public.run_id, self.public.epoch, self.clock_id)
+                         and type(receipt.response_ns) is int
+                         and started <= receipt.response_ns <= completed
+                         and type(receipt.status) is str
+                         and receipt.status in {"acknowledged", "failed", "unchanged", "unknown"})
+            except Exception:
+                valid = False
+            if not valid:
+                self._remember_unbound_response(request_id)
+                raise UnboundActionResponse(request_id)
             if completed >= deadline:
                 receipt = replace(receipt, response_ns=completed, status="unknown",
                                   error="mutation deadline exceeded; effect unknown")
             outcome = receipt.status
             return receipt
         finally:
-            self.steps.append(Step("mutation", request_id, origin, started, self._now(), outcome))
+            try:
+                final_ns = self._now()
+            except Exception:
+                if self._cleanup_error is None:
+                    self._remember_unbound_response(request_id)
+                raise
+            self.steps.append(Step("mutation", request_id, origin, started, final_ns, outcome))
 
     def _guard(self, original: Intent, request_id: str,
                end_ns: int | None = None) -> Intent | None:
