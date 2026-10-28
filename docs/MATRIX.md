@@ -226,3 +226,72 @@ media/identity/report/cleanup-failure retention and external-anchor tamper cases
 need later authorized runtime qualification. All existing independent, private
 release/redaction, backend, packaging and final composed source-pin gates remain.
 The sidecar is PRIVATE: no public export/redaction/publishing authority is given.
+
+## Fixed source-schedule adapter (r3)
+
+The fixed evaluation.source_schedule facade supplies source binding, NOT research
+freeze, signature, admission receipt or instrument acceptance. No adapter function
+or import has been executed under Dirty construction and no artifact generated.
+D1 owns its fixed freeze delegation and exclusive operator-PRIVATE output path;
+this module performs no write, task execution, callback dispatch or plugin load.
+
+build_source_schedule(inputs, *, admission, expected_input_sha256,
+expected_hashes) -> SourceScheduleArtifact. Inputs use the existing matrix runner's
+complete input mapping, including matrix, external private specs/config/limits/
+price/pins and actual keyless entrypoint byte pin. Admission is the exact existing
+VerifiedAdmission type from trusted external verification, bound to full canonical
+inputs. Missing/PENDING admission returns pending; explicit FAIL or malformed/
+mismatched binding returns refused. Missing positive external anchors yields no
+artifact. Component mismatches are refused, including when other components are
+missing. No default source hash, template receipt, clearance or approval is minted.
+
+Expected hashes have exactly these keys, all externally selected lowercase SHA256:
+
+- matrix, metadata, specs, config, limits, price and pins: existing canonical
+  digest of the corresponding actual input object (metadata is inside matrix).
+- schedule: actual validated pins.schedule; source and oracle: actual byte-
+  inventory pins validated by existing validate_inputs/implementation_pins.
+- entrypoint: actual checked script byte pin from inputs.entrypoint_sha256.
+- admission: canonical digest of the actual verified state/input_sha256/reasons
+  snapshot. This binds that external decision representation, not a human signature.
+
+The expected full-input digest must match both actual inputs and admission binding.
+Builder must not derive trust anchors from an untrusted document just to make the
+function ready. Actual checkout bytes, including this evaluator module, and actual
+script bytes are read/compared only on later authorized invocation. Freeze after
+complete source composition; line-ending changes or changed source require new
+external pins. This source supplies no future assumed hash labelled as real.
+
+DTO state is ready/pending/refused, reasons an immutable tuple. artifact_json is
+an immutable canonical JSON string or null; .artifact decodes a fresh mapping and
+.to_dict() returns state/reasons/artifact for D1 PortResult adaptation. No mutable
+alias to caller inputs remains. Ready describes source binding only.
+
+Artifact schema rlab.source-schedule.v1 contains kind=source_schedule_only, exact
+original dev matrix (schedule/metadata/profile/order), full input digest, component
+hashes, explicit NOT PROVIDED research/signature/data-admission/instrument fields,
+runtime=unverified and canonical body sha256. Private specs, config and price are
+hashed, not embedded into the artifact or passed to an actor. Original matrix
+validation restricts F1/F2/F3 development seeds0..19, fixture mode; no hidden/T2
+source, answers, live execution or independently authored truth is supplied.
+
+Strict native acyclic JSON only. Bound inputs/artifacts to32MiB conservative
+canonical traversal budget,500000 visited nodes,depth32,1Mi characters/string,
+4096 characters/key and128-bit integers. Reject custom objects/subclasses,
+non-string keys/nonfinite numbers and cycles without repr/serializer hooks.
+External component anchor map has at most12 known keys. Bounded refusal gives no
+artifact, never a truncated schedule advertised as exact.
+
+verify_source_schedule(artifact, *, inputs, admission,
+expected_artifact_sha256=EXTERNAL, expected_input_sha256=EXTERNAL,
+expected_hashes=EXTERNAL) checks independently retained artifact body digest then
+rebuilds source binding from original inputs and current checkout bytes. Passing
+self-asserted artifact hashes is not authenticated approval. Source verification
+never implies runtime, custody, billing, rights or independent qualification.
+Main report/provenance verifiers retain their existing separate scopes.
+
+Deferred: D1 fixed adapter/private output join; missing real external approvals;
+actual input-size fit, DTO alias and mismatch/refusal cases, source/entrypoint/
+metadata/private-input tamper and line-ending verification; output ACLs/packaging
+and all prior runtime/independent gates. Existing combined static-import policy
+FAIL is still open under its owner; adapter source construction does not clear it.

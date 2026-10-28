@@ -75,6 +75,8 @@ class OperatorPorts:
     fixture: FixturePort | None = None
     admission: AdmissionPort | None = None
     provider: ProviderPort | None = None
+    # Trusted embedding only. A JSON PASS/manifest cannot populate this object.
+    source_schedule_admission: Any = None
 
 
 class UnavailableError(Exception):
@@ -234,6 +236,9 @@ def _parser() -> argparse.ArgumentParser:
         if name == "freeze":
             command.add_argument("--private-dir", required=True, type=Path)
             command.add_argument("--name", default="schedule.json")
+            command.add_argument("--source-inputs", type=Path)
+            command.add_argument("--source-expected-hashes", type=Path)
+            command.add_argument("--source-expected-input-sha256", type=Path)
     report = commands.add_parser("report", help="build private operator report using fixed evaluator")
     for name in ("schedule", "records", "pins", "config", "price"):
         report.add_argument(f"--{name}", required=True, type=Path)
@@ -297,10 +302,25 @@ def main(argv: Sequence[str] | None = None, *, ports: OperatorPorts | None = Non
             )
             fixture = ports.fixture
             if fixture is None:
-                from .dev_backend import DevelopmentBackend
+                from .dev_backend import DevelopmentBackend, JoinedDevelopmentOrchestration
+                orchestration = None
+                if args.command == "freeze":
+                    if any(value is None for value in (args.source_inputs, args.source_expected_hashes,
+                                                       args.source_expected_input_sha256)):
+                        _emit("pending", "Source schedule requires external full inputs and independent anchors")
+                        return 3
+                    inputs_path = args.source_inputs.resolve(strict=True)
+                    if any(inputs_path.samefile(path.resolve(strict=True)) for path in (
+                            args.source_expected_hashes, args.source_expected_input_sha256)):
+                        raise ValueError("source inputs must differ from independent anchors")
+                    orchestration = JoinedDevelopmentOrchestration(
+                        inputs=_mapping(inputs_path), admission=ports.source_schedule_admission, port=None,
+                        expected_input_sha256=_digest(args.source_expected_input_sha256),
+                        expected_source_hashes=_expected_hashes(args.source_expected_hashes))
                 fixture = DevelopmentBackend(
                     admission=ports.admission, document=document, expected_hashes=expected,
                     builder_ids=builders, trusted_ids=trusted, db_root=args.db_root,
+                    orchestration=orchestration,
                 )
             if args.command == "run":
                 result = fixture.run(request)

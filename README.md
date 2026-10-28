@@ -3,6 +3,12 @@
 M18 source construction. **Dirty Mode; runtime unverified.** All model cells are
 **not yet measured**. This source is not a qualified keyless instrument.
 
+Fixed application source now includes an inherited-capability worker control loop,
+public capture/action owner, typed browser-authority receipt IPC consumer and lazy
+Playwright commands/projection. The operator supplies authenticated IPC and genuine
+activation; canonical privileged isolation and runtime remain unqualified. Source
+scheduling delegates to the fixed D3 facade with external admission and anchors.
+
 The standard-library Python 3.12+ foundation includes public contracts, a
 transactional SQLite authority, original F1 order/F2 ticket/F3 delete development
 adapters and HTML, visible-history verification, semantic re-resolution, and

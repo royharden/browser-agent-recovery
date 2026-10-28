@@ -27,9 +27,9 @@ descendant termination. No public API accepts a PID or arbitrary executable.
 rejects duplicate JSON members and nonfinite constants and caps frames at 16 KiB.
 It exposes no SQL, shell, reset, seal, upload, tool, environment or admin command.
 `read_action()` needs a future deadline-enforced transport; it is not itself a
-preemption mechanism. `worker.main()` refuses until enforcement/public IPC/browser
-context are joined. MAX_ACTIONS is a declared bound for that future loop, not a
-claim that an unimplemented loop currently accounts for actions.
+preemption mechanism. `worker.main(config, capabilities)` now supplies the fixed public control loop
+described below. A standalone invocation refuses absent inherited capabilities.
+This composition API does not establish isolation or canonical activation.
 
 `PrivateAdmin` is an explicitly labelled in-process development adapter. Its
 `bind_development()` requires Linux authority UID/GID, private root and SO_PEERCRED;
@@ -128,11 +128,63 @@ remains distinct from this accepted provider framing protocol.
 
 These are joined application SOURCE contracts only. No FIFO was opened, read or
 written; no codec, broker, prompt, loop, provider, process or test was executed.
-The default worker entry still refuses because actual inherited-FD provisioning,
-supervisor launch, trusted owner/client wiring and isolated fresh browser context
-are unjoined. The authority clock and pipe deadline must share Linux's monotonic
+The standalone worker entry still refuses because actual inherited-FD provisioning,
+supervisor launch and isolated fresh browser context are unjoined. Explicit
+operator composition now has the joined public-channel source described below. The authority clock and pipe deadline must share Linux's monotonic
 domain; clock/FD ownership and descriptor lifetime require runtime verification.
 In-process observe/provider calls cannot be forcibly preempted by selector checks;
 privileged process containment and hard cancellation remain missing. Canonical
 UID/ACL/namespace/egress/scorer qualification and external admission remain refused
 or pending. This source adds no S3 accounting, live SDK or security PASS receipt.
+
+
+## Fixed worker composition (r6; source only)
+
+`worker.main(WorkerConfig, WorkerCapabilities)` drives actual bounded capture,
+accepted `WorkerPipeClient.request`, closed action validation and public execution.
+`WorkerConfig` pins run/epoch/clock, the existing 40-step/16-call/180-second maximum
+limits, a positive request timeout capped at 30 seconds and bounded wait duration.
+`WorkerCapabilities` accepts exact `WorkerPipeClient` and `PublicActionPipe` objects,
+with separate inherited streams. It accepts no authority, private spec, admin,
+provider, broker owner, authorization handle, callback, plugin or endpoint loader.
+Actor frames cannot select descriptors, files, endpoints or capability classes.
+
+`PublicActionPipe` uses the existing bounded length-prefix codec and inherited
+nonblocking FIFO operations. Its only operations are `capture` with an empty
+payload and `execute` with one closed provider action. Replies correlate exact
+version/operation/request ID. Each loop ID is deterministic and fresh within the
+pinned run's dedicated stream; the owner rejects repeats. Capture returns only
+the exact public observation and public broker request. Worker checks digest,
+run/epoch/clock, snapshot, literal allowlisted path and wait cap before execution.
+Finish requires a correlated ordinary acknowledgement and is not server success.
+
+`PublicActionPipeOwner(endpoint, action_port, offline_owner, config=...)` is the
+concrete privileged counterpart. Its `serve_once(trusted_deadline_ns)` captures
+and authorizes via the accepted offline owner using the actual trusted action
+port, and forwards that same capture through the owner's private observation
+slot; it never recaptures a potentially different snapshot. The separate offline
+owner serves the broker exchange before the public owner serves execution. Public
+requests never authorize arbitrary messages or supply authority clock/deadline
+fields. Only one capture can be pending; execute consumes it before invoking the
+actual `ActionPort.execute`. The owner independently checks all action bounds,
+run/epoch/clock, step/call/time caps and feedback identities/times. Ordinary
+feedback is retained privately for the next cleared prompt; worker fields cannot
+substitute it. The worker never receives either owner object.
+
+Worker results retain bounded observation, full broker reply and latest public
+reply plus error text per attempted iteration, including provider failures and
+unknown transport outcomes. Owner records retain request/reply/error when possible,
+including a reply whose delivery failed. A malformed frame or uncertain operation
+closes its stream with no resynchronization/retry. The caller retains returned
+results and terminal owner records; no durable artifact or qualification receipt
+is written by this loop. Exceptions during configuration validation are refusals,
+not execution outcomes. Descriptor disposal remains the operator's responsibility.
+
+This is source composition, not a privileged launcher. No Boolean attestation,
+fake isolation token or bypass of `SourceProfile.require_activation()` was added.
+No-argument `python -m rlab.worker` still refuses. Canonical activation remains
+refused until genuine privileged isolation/descriptor/context enforcement exists;
+passing ordinary Python capabilities does not qualify that enforcement. The two
+owner channels require trusted scheduling and hard process cancellation supplied
+by that later infrastructure. Linux monotonic-domain equality, FIFO ownership,
+browser effects, joined concurrency and all runtime behavior remain unverified.
