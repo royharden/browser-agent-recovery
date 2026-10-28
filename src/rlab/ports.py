@@ -1,11 +1,11 @@
 """Trusted executor ports; implementations must honor absolute deadlines."""
-from dataclasses import dataclass
-from typing import TYPE_CHECKING, Literal, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
     from .actions import Action
 
 from .contracts import HistoryRead, Intent, Origin, PublicTask
+from .public_records import ActionReceipt, InteractionReceipt
 from .views import Page
 
 
@@ -25,30 +25,6 @@ class UnboundActionResponse(RuntimeError):
     def __init__(self, request_id: str):
         self.request_id = request_id
         super().__init__("authoritative completion unavailable for request " + request_id)
-
-
-@dataclass(frozen=True)
-class ActionReceipt:
-    request_id: str
-    run_id: str
-    epoch: str
-    clock_id: str
-    response_ns: int
-    status: Literal["acknowledged", "failed", "unchanged", "unknown"]
-    error: str = ""
-
-
-@dataclass(frozen=True)
-class InteractionReceipt:
-    """Trusted browser interaction timing; not a server mutation/effect event."""
-    request_id: str
-    run_id: str
-    epoch: str
-    clock_id: str
-    response_ns: int
-    status: Literal["acknowledged", "unknown"]
-    url: str
-    error: str = ""
 
 
 @runtime_checkable

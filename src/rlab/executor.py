@@ -5,8 +5,7 @@ controller, not a browser worker or a demonstrated process isolation boundary.
 An adapter must enforce each supplied absolute deadline; synchronous Python
 cannot preempt an adapter that ignores it.
 """
-from dataclasses import dataclass, replace
-from typing import Literal
+from dataclasses import replace
 from urllib.parse import unquote, urlsplit
 from uuid import uuid4
 
@@ -14,36 +13,9 @@ from .contracts import FailedAction, HistoryRead, Intent, Origin, Target
 from .actions import Action, validate_action
 from .ports import (ActionReceipt, BrowserPort, InteractionPort, InteractionReceipt,
                     PreparedCancellationError, UnboundActionResponse)
+from .public_records import Arm, Disposition, ExecutionResult, Step
 from .recovery import Reconciliation, resolve
 from .views import Page
-
-Arm = Literal["R0", "R1", "R2", "R3", "R23"]
-Disposition = Literal["acknowledged", "committed", "returned", "abstained", "cap_abort", "harness_unknown"]
-
-
-@dataclass(frozen=True)
-class Step:
-    kind: str
-    request_id: str
-    origin: Origin
-    started_ns: int
-    completed_ns: int
-    outcome: str
-
-
-@dataclass(frozen=True)
-class ExecutionResult:
-    root_intent_id: str
-    arm: Arm
-    disposition: Disposition
-    receipts: tuple[ActionReceipt, ...]
-    steps: tuple[Step, ...]
-    reason: str = ""
-    cancelled_request_ids: tuple[str, ...] = ()
-    pending_cleanup_request_ids: tuple[str, ...] = ()
-    uncertain_request_ids: tuple[str, ...] = ()
-    request_id: str = ""
-
 
 class CapExceeded(Exception):
     """An operation was refused before dispatch or exceeded a trusted limit."""
