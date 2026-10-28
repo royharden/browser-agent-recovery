@@ -10,9 +10,9 @@ Page.controls is retained. Private BrowserPeerComposition/peer/IPC/context contr
 authority bundles,task specifications,expected effects,hidden answers and seeds
 are excluded. The canonical PUBLIC event envelope remains explicitly unsupported.
 
-Accepted9b52b2a plus D4's exact browser_receipt_peer declaration has a clear affected
-static scan:40 modules,19 public roots,20 transitive,zero findings/unknowns,exit0.
-All three operator browser modules stay forbidden public dependencies. This is not
+Accepted f57099f plus D4's exact media_capture declaration has a clear affected
+static scan: 41 modules, 19 public roots, 20 transitive, zero findings/unknowns, exit 0.
+All operator browser and media modules stay forbidden public dependencies. This is not
 an installed-wheel,runtime,identity,isolation,authentication or admission result.
 
 Source/generator hashes wait later export against final accepted bytes/line endings;
@@ -20,3 +20,8 @@ no research freeze,source schedule artifact or independent receipt was minted.
 Schema generation/conformance,class identity,serialization and actual wheel contents
 remain deferred. Packaging excludes private evaluation/heldout packages and disables
 implicit package data; distributing generated resources needs an explicit decision.
+
+MediaStatus/ContextReceipt shapes are unchanged. Opt-in capture policies, rich private
+artifact paths/manifests/results never become actor schemas. The evaluator's safe
+relative JSON/video references do not include trace ZIP links, and metadata integrity
+does not verify current raw media bytes or qualify capture/privacy/runtime behavior.

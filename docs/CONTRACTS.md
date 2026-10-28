@@ -2,7 +2,7 @@
 
 Version 2.1.0 is source-only. No schema files, source schedule, research freeze or
 qualification receipts were generated. The current accepted application source
-pin is 9b52b2af1a4ba2ced9b03e1f7b0ccc75cf8d5b82, before D4's final map update.
+pin is f57099f16de021c776d367afcc1c00ef966a70e3, before D4's media map update.
 Canonical definitions and validators remain implementation truth.
 
 ## Derivation and compatibility
@@ -17,6 +17,9 @@ ExecutionResult, plus Arm/Disposition literal aliases. Legacy ports/executor exp
 alias those exact classes in source; their Python class module changed to
 rlab.public_records. Annotation/decorator/default fields of allowlisted records
 are unchanged in the final peer/callsite delta. Schema mapping remains 2.1.
+The subsequent media delta changes neither these allowlisted records nor the
+MediaStatus/ContextReceipt class ASTs. Operator media policies, private artifact
+paths/manifests/results are not new actor schema targets.
 
 Each class maps to a closed object under $defs/module.ClassName. All fields are
 required, including constructor defaults, because this describes a COMPLETE
@@ -70,13 +73,13 @@ handling remain unexercised. No generated JSON is claimed to exist.
 
 scripts/check_boundaries.py parses bounded Python source and packaging TOML, never
 imports the application. public_records is explicitly PUBLIC. Exact operator ENTRY
-modules browser_ipc, playwright_bridge and browser_receipt_peer are also forbidden
+modules browser_ipc, playwright_bridge, browser_receipt_peer and media_capture are also forbidden
 public dependency targets; trusted declarations never exempt actor/worker closure.
 Other exact layer declarations remain in the checker as the single policy source.
 
-The affected actual combined scan reports 40 modules,19 public roots,20 transitive
+The affected actual combined scan reports 41 modules, 19 public roots, 20 transitive
 modules,zero violations,zero unresolved,exit0 static_scope_clear. This supersedes
-the earlier27/37/39-module snapshots. Only the accepted source delta justified this
+the earlier 27/37/39/40-module snapshots. Only the accepted source delta justified this
 scan; no unchanged repeat or synthetic test was run. AST imports conservatively
 include TYPE_CHECKING/function/conditional paths. Reflection, arbitrary loader alias
 changes and runtime import-path mutation cannot be proven by this analysis.
@@ -88,4 +91,9 @@ wheel contents/resource needs remain unverified. Static clear proves no worker U
 ACL,egress,authentication,custody,admission,clock or runtime isolation property.
 
 See [interfaces](INTERFACES.md) for the current producer/observer/receipt/field
-callsite map and the still-unprovided canonical activation requirements.
+and media lifecycle source map and still-unprovided canonical activation requirements.
+Media completion receipts describe inspected actual files only after later capture;
+partial or retained paths do not imply completed artifacts. Rich private ZIP/manifest
+data is separate from the evaluator's closed safe-relative JSON/video references.
+Neither report metadata integrity nor an unexecuted source hash authenticates raw
+media bytes, privacy, runtime capture, native writer quotas or filesystem/ACL behavior.
