@@ -140,9 +140,7 @@ class Executor:
                                     self.clock_id, request_id, started, self._now(),
                                     None, None, (), successful=False, complete=False)
             completed = self._now()
-            if completed >= deadline and not (
-                    timed_out and completed < self.deadline_ns
-                    and (end_ns is None or completed < end_ns)):
+            if completed >= deadline:
                 if end_ns is not None and deadline == end_ns < self.deadline_ns:
                     raise ReconciliationExpired("history exceeded reconciliation window")
                 raise CapExceeded("read exceeded deadline")
@@ -313,8 +311,6 @@ class Executor:
                         retried.run_id, retried.epoch, retried.clock_id, retried.response_ns))
                 else:
                     self._wait(self.poll_wait_ns, recovery_end)
-        except ReconciliationExpired as exc:
-            return result("abstained", "AMBIGUOUS_ABSTENTION: " + str(exc))
         except (CapExceeded, TimeoutError) as exc:
             # Adapter wait/observe methods can raise at their post-call check.
             # Preserve the recovery disposition even when that lower layer did
@@ -323,6 +319,14 @@ class Executor:
                 now = self._now()
             except InvalidEvidence as invalid:
                 return result("harness_unknown", str(invalid))
+            # Genuine run/method overruns take precedence even if an adapter
+            # overshoots a shorter recovery deadline by a large amount.
+            if now >= self.deadline_ns or (
+                    self.steps and self.steps[-1].completed_ns >=
+                    self.steps[-1].started_ns + self.action_budget_ns):
+                return result("cap_abort", str(exc))
+            if isinstance(exc, ReconciliationExpired):
+                return result("abstained", "AMBIGUOUS_ABSTENTION: " + str(exc))
             if (recovery_end is not None and recovery_end < self.deadline_ns
                     and recovery_end <= now < self.deadline_ns
                     and len(self.steps) < self.max_actions):
