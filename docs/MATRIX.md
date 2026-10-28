@@ -43,6 +43,15 @@ single-run producer. No import path, plugin, serialized code, shell, service or
 artifact is loaded as executable code. Default backend is unavailable.
 
 - `offline_only is True`, nonempty `clock_id`, monotone integer `now_ns()`.
+- `preflight(row, config) -> UnattemptedRun(schedule_id, reason) | None` is
+  mandatory. D1 maps D2's missing/mismatched externally cleared prompt/profile
+  result here BEFORE authority reset, actor clock/observe or provider dispatch.
+  Typed refusal keeps the exact scheduled row as not_executed with its reason,
+  leaves evaluator records absent, and does not fabricate a seal. None means
+  ready for the separately admitted bounded attempt; it is not licence clearance.
+  Preflight must be effect-free and bounded. Its failure stops later dispatch;
+  a backend lacking this method cannot reset/execute. Matrix operator clock
+  reads are bookkeeping, distinct from D2's unstarted actor-run clock.
 - `reset(row, config) -> RunLease(schedule_id, run_id, epoch, clock_id,
   namespace, context_id)` creates fresh authority state/namespace/browser context.
   IDs cannot be reused anywhere in this matrix. Reset must clean up internally

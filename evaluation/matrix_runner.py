@@ -37,6 +37,13 @@ class SealedRun:
 
 
 @dataclass(frozen=True)
+class UnattemptedRun:
+    """Trusted preflight refusal before authority/reset/actor/provider activity."""
+    schedule_id: str
+    reason: str
+
+
+@dataclass(frozen=True)
 class VerifiedAdmission:
     """Only the trusted external verifier may construct this decision.
 
@@ -53,6 +60,7 @@ class MatrixRunPort(Protocol):
     clock_id: str
 
     def now_ns(self) -> int: ...
+    def preflight(self, row: dict, config: dict) -> UnattemptedRun | None: ...
     def reset(self, row: dict, config: dict) -> RunLease: ...
     def execute(self, lease: RunLease, row: dict, config: dict,
                 deadline_ns: int) -> SealedRun: ...
@@ -188,6 +196,22 @@ def run_matrix(inputs: dict, *, admission: VerifiedAdmission | None,
             row = {"schedule": _copy(scheduled), "metadata": _copy(meta)}
             config = {**limits, "matrix_input_sha256": bound,
                       "matrix_deadline_ns": matrix_deadline}
+            # D1 checks D2's externally cleared prompt/profile readiness without
+            # running/resetting authority, actor, observation or provider. Only
+            # this pre-attempt path can leave a refused row not_executed.
+            readiness = port.preflight(_copy(row), _copy(config))
+            if isinstance(readiness, UnattemptedRun):
+                if (readiness.schedule_id != row_id or not isinstance(readiness.reason, str)
+                        or not readiness.reason.strip()):
+                    raise ValueError("bound preflight refusal identity/reason required")
+                entry["reason"] = readiness.reason
+                continue
+            if readiness is not None:
+                raise ValueError("typed preflight refusal or None required")
+            if stop() or now() >= matrix_deadline:
+                gate = "operator_stop_or_matrix_deadline"
+                entry["reason"] = gate
+                continue
             deadline = min(matrix_deadline, now() + limits["run_timeout_ns"])
             config["run_deadline_ns"] = deadline
             # Attempted reset may have effects even if it raises or returns garbage.
