@@ -32,8 +32,8 @@ blocking WSGI read. These are integration assumptions, not proven protections.
 and task object must never be given to a worker. It delegates observations and
 mutations to `DevelopmentTask`; history must use `DevelopmentTask.history(id)`
 so task-owned lag/fault behavior is retained. There is no direct-authority-history
-fallback. The baseline foundation did not have this task history method: DL2's
-fault/lag source must supply it before this joined path can run. The confirmed
+fallback. DL2's accepted producer baseline `5ace58b` supplies this task history
+method and has been merged for static consumer reconciliation. The confirmed
 r3 seam also supplies `Authority.now_ns()`, and `LocalTaskPort.now_ns()` delegates
 to it so method deadlines and response timing share the authority clock domain.
 Clock identity and monotonic-clock assumptions still require runtime qualification.
@@ -46,6 +46,23 @@ after. Task action performs fallback preparation once when omitted by R0/R1/R2;
 there is no common semantic guard or double preparation. A successful
 `changed=false` dictionary is acknowledged as a legitimate no-op, not treated
 as an automatic retry trigger.
+
+If fresh resolution refuses, or the executor exits before issuing a prepared
+mutation, `cancel_action(request_id)` releases the pending submission. It is
+trusted non-effect cleanup, exempt from browser-operation admission so it can
+run after an expired deadline or an exhausted cap. Result metadata records
+cancelled request IDs. Cleanup failure is harness-unknown. An issued action
+consumes its preparation, even when confirmation is lost; it is never cancelled
+as a substitute for history reconciliation. A local preparation that overruns
+its deadline cancels before propagating the timeout.
+
+The producer installs deterministic STALE_ID remaps before guarded observation
+and reuses preparation for the same request ID; current source has no asynchronous
+onset after resolution. Its default acknowledgement is local page installation,
+not a real browser acknowledgement. A future transport must supply the trusted
+`acknowledge_remap(Page)` callback and qualify the asynchronous boundary race.
+Failed acknowledgement remains a producer harness-error marker, not a fired
+successful browser event.
 
 The confirmed task seam reserves `ValueError` for pre-effect expired-view or
 missing-reference rejection, which yields a `failed` receipt. Other exceptions
@@ -82,6 +99,9 @@ operations (including observations, history probes, waits and retries), a fixed
 180-second run deadline, and at most three seconds per method. The reconciliation
 window defaults to four seconds from the failed response and never resets after
 a retry. All additional probes/actions/waits consume steps and elapsed time.
+Recovery-window exhaustion yields ambiguous abstention; genuine method or run
+cap overruns take precedence and remain cap aborts. A history timeout before its
+method deadline is unsuccessful/incomplete evidence, never an empty-success read.
 No elapsed timeout alone proves absence. The 40-operation interpretation is
 stricter than a mutation-only action count and must be checked for profile fit
 later; it is not evidence that a future live-model request profile fits.

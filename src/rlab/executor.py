@@ -37,6 +37,7 @@ class ExecutionResult:
     receipts: tuple[ActionReceipt, ...]
     steps: tuple[Step, ...]
     reason: str = ""
+    cancelled_request_ids: tuple[str, ...] = ()
 
 
 class CapExceeded(Exception):
@@ -103,6 +104,7 @@ class Executor:
         self._last_ns = self.started_ns
         self._captured: dict[str, Intent] = {}
         self._used: set[str] = set()
+        self._prepared_request: str | None = None
 
     def _now(self) -> int:
         now = self.port.now_ns()
@@ -212,7 +214,13 @@ class Executor:
         outcome = "unknown"
         try:
             try:
-                receipt = self.port.execute(intent, request_id, origin, deadline)
+                try:
+                    receipt = self.port.execute(intent, request_id, origin, deadline)
+                finally:
+                    # Port consumes or cancels preparation on every issued call,
+                    # including its pre-dispatch deadline rejection.
+                    if self._prepared_request == request_id:
+                        self._prepared_request = None
             except Exception as exc:
                 # Dispatch may already have changed server state; no no-effect inference.
                 receipt = ActionReceipt(request_id, self.public.run_id, self.public.epoch,
@@ -240,6 +248,7 @@ class Executor:
         outcome = "unknown"
         try:
             self.port.prepare_action(request_id, deadline)
+            self._prepared_request = request_id
             if self._now() >= deadline:
                 raise CapExceeded("preparation exceeded deadline")
             outcome = "prepared"
@@ -263,8 +272,20 @@ class Executor:
         recovery_end: int | None = None
 
         def result(state: Disposition, reason: str = "") -> ExecutionResult:
+            cancelled: tuple[str, ...] = ()
+            if self._prepared_request is not None:
+                pending = self._prepared_request
+                self._prepared_request = None
+                try:
+                    # Trusted non-effect cleanup is not a browser operation;
+                    # release pending state even after cap/expiry/refusal.
+                    self.port.cancel_action(pending)
+                    cancelled = (pending,)
+                except Exception as exc:
+                    state = "harness_unknown"
+                    reason = "prepared cancellation failed: " + type(exc).__name__
             return ExecutionResult(intent.root_intent_id, arm, state, tuple(receipts),
-                                   tuple(self.steps[first_step:]), reason)
+                                   tuple(self.steps[first_step:]), reason, cancelled)
 
         try:
             guarded = arm in {"R3", "R23"}

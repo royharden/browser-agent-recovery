@@ -22,6 +22,7 @@ class LocalTaskPort:
         self.task = task
         self.public = task.public
         self.clock_id = task.authority.clock_id
+        self._prepared_request: str | None = None
 
     def now_ns(self) -> int:
         return self.task.authority.now_ns()
@@ -46,14 +47,30 @@ class LocalTaskPort:
         if not request_id:
             raise ValueError("trusted request identity required")
         self.task.prepare_action(request_id)
-        self._check(deadline_ns)
+        self._prepared_request = request_id
+        try:
+            self._check(deadline_ns)
+        except TimeoutError:
+            self.cancel_action(request_id)
+            raise
+
+    def cancel_action(self, request_id: str) -> None:
+        """Trusted non-mutation cleanup, allowed after an action deadline."""
+        self.task.cancel_action(request_id)
+        if self._prepared_request == request_id:
+            self._prepared_request = None
 
     def execute(self, intent: Intent, request_id: str, origin: Origin,
                 deadline_ns: int) -> ActionReceipt:
-        self._check(deadline_ns)
-        if not request_id or origin not in {
-                "agent_direct", "controller_retry", "controller_resolve"}:
-            raise ValueError("trusted request lineage required")
+        try:
+            self._check(deadline_ns)
+            if not request_id or origin not in {
+                    "agent_direct", "controller_retry", "controller_resolve"}:
+                raise ValueError("trusted request lineage required")
+        except Exception:
+            if self._prepared_request == request_id:
+                self.cancel_action(request_id)
+            raise
         try:
             result = self.task.action(
                 intent, intent.target.ref, intent.target.snapshot_epoch,
@@ -67,6 +84,11 @@ class LocalTaskPort:
             # interrupted-action TimeoutError is never evidence of absence.
             return ActionReceipt(request_id, self.public.run_id, self.public.epoch,
                                  self.clock_id, self.now_ns(), "unknown", str(exc))
+        finally:
+            # DevelopmentTask.action consumes preparation even after lost
+            # confirmation. Never cancel a mutation that was already issued.
+            if self._prepared_request == request_id:
+                self._prepared_request = None
         response_ns = self.now_ns()
         status = "unknown"
         error = "invalid task action response; effect unknown"
