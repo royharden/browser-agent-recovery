@@ -9,5 +9,9 @@ description = "Source-only development foundation for visible-state browser reco
 requires-python = ">=3.12"
 dependencies = []
 
+[project.scripts]
+rlab = "rlab.cli:main"
+
 [tool.setuptools.packages.find]
 where = ["src"]
+include = ["rlab*"]

@@ -133,3 +133,38 @@ worker ACL/egress and archive-denial probes. P2/P5 custody and independent
 qualification cannot be replaced by agent source review. Runtime stays
 unverified; no tests, imports of application code, services, installs, Docker,
 credentials, network/model calls, spend or publication were performed here.
+
+## Closed browser consumer source (r3)
+
+`actions.py` accepts only click/fill/select/goto/back/reload/wait/finish with
+closed field sets, exact types and bounded strings/waits. Mutation clicks carry
+captured public operation/target/form/version intent; no hidden expected effects.
+`snapshot.py` rejects oversized snapshots instead of truncating them (64 refs,
+16KiB body, 32KiB body plus visible target text), requires unique refs and matching
+snapshot epoch, and checks only captured control roles for action applicability.
+It does not compare new DOM identity for native R0/R1. Only the recovery guard
+freshly re-resolves semantics for R3/R23.
+
+`routing.py` permits an exact configured loopback origin and the current task's
+GET page/history and POST action routes. Other origins, admin/other-run paths,
+encoded/traversal/query/fragment routes, redirects, downloads and uploads are
+refused. This policy must be installed on every request by a real backend; a
+lexical policy and post-navigation check are not egress isolation proof.
+
+`browser.py` provides a typed `TrustedBridge`/`BrowserAdapter`/`BrowserSession`
+consumer. No default backend, Playwright import/startup or direct HTTP exists.
+The mandatory missing hook must create and attest a fresh context, enforce all
+resource routes/methods and event behavior, extract public DOM snapshots, supply
+authority-bound mutation/history/read timing and lineage, honor deadlines and
+acknowledge actual remap installation. Ordinary browser timeouts do not synthesize
+authority events. Media metadata records unqualified/not-requested/error states.
+In-process facade access is not a secure worker boundary.
+
+Non-mutation browser interactions use the same executor operation/time budget as
+observations/history/mutations/recovery. Mutation clicks retain the existing
+five-arm path and pending-cleanup halt. finish means actor termination only,
+never server success. Navigation requires another captured snapshot before ref
+actions. F2 scripted fill needs a public Body textbox from the future DOM snapshot
+hook; the foundation's button-only projection is insufficient and is not silently
+upgraded to a successful fixture. Provider/admission and real browser/worker hooks
+remain unavailable until separately implemented and qualified.

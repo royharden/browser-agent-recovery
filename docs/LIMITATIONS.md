@@ -1,0 +1,60 @@
+# Construction limits
+
+This repository contains authored development source. Runtime is unverified.
+Static parsing and source/diff review are the validation available for this
+Dirty Mode construction milestone. No unit, integration, browser, fault/lag,
+concurrency, isolation, admission, policy, scoring or report matrix has been run
+as part of this work. Model cells remain not yet measured.
+
+## Public browser boundary
+
+The browser module declares the closed action/snapshot facade and the required
+trusted bridge contract. No real browser/server bridge implementation is bound
+by default. Missing bridge integration is unavailable; the facade does not
+substitute direct authority calls or manufacture browser receipts. No browser,
+server, Docker stack or service was launched for this milestone.
+
+The in-process Python facade is not process isolation. A future worker needs a
+bounded IPC interface, an actual fresh browser context and route/resource
+enforcement, trusted request/clock/render lineage, preemptible transport
+deadlines, and qualified ACL/egress/archive denial. Interface declarations and
+lexical route checks do not demonstrate those protections. Trace/video capture
+and live DOM reference installation also need real integration and validation.
+
+## Authored scripted solver
+
+`rlab.scripted.run_scripted` accepts only the explicit development goals for
+ordering a numbered widget with quantity one, creating a general support
+ticket with a numbered widget body, and deleting exactly a numbered widget.
+It derives original target/form fields from that public goal and selects only
+a unique visible role/name/row match. It uses public actions, observations and,
+when the snapshot omits its version, complete current public history. Missing
+or ambiguous controls and unavailable version evidence stop submission.
+
+Ticket creation additionally requires a unique visible `textbox` named `Body`
+in the `general` row and an acknowledged fill. HTML containing a textarea is
+insufficient unless the public snapshot exposes its actionable textbox target.
+The current development page target list supplies buttons only; F2 therefore
+remains unavailable through that target list until integration supplies the
+textbox. The solver does not pretend a field was filled or bypass the form.
+
+The solver issues one original mutation action and delegates recovery to the
+selected executor arm. It does not implement hidden families or inspect private
+specifications, expected fixtures, evaluation answers or authority state.
+`authored_scripted` is provenance, not independent reference truth. An authored
+outcome, acknowledged action or `finish` does not establish task/oracle success.
+Exceptions after dispatch preserve uncertainty and never justify resubmission.
+
+## Deferred qualification
+
+Provider bindings, live-model execution, independent authorship/data admission,
+licence clearance, private oracle qualification and study acceptance remain
+pending. No keyless instrument, provider availability, evaluation readiness or
+budget-control acceptance is established by these sources. No keys, accounts,
+spend, installs, environment setup, network/model calls, pushes or publication
+were used in this construction work.
+
+All arms and fault/lag combinations, original-field retention, stale/remapped
+references, ambiguous history, duplicate/no-op effects, caps/deadlines, host
+rejection paths and bridge/process protections still need authorized runtime
+qualification. Source review cannot replace independent evaluation or admission.

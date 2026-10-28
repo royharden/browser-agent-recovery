@@ -11,7 +11,9 @@ from urllib.parse import unquote, urlsplit
 from uuid import uuid4
 
 from .contracts import FailedAction, HistoryRead, Intent, Origin, Target
-from .ports import ActionReceipt, BrowserPort, PreparedCancellationError
+from .actions import Action, validate_action
+from .ports import (ActionReceipt, BrowserPort, InteractionPort, InteractionReceipt,
+                    PreparedCancellationError)
 from .recovery import Reconciliation, resolve
 from .views import Page
 
@@ -178,6 +180,40 @@ class Executor:
         read = self._read("history")
         assert isinstance(read, HistoryRead)
         return read
+
+    def perform(self, action: Action) -> InteractionReceipt:
+        """Closed non-mutation interaction sharing the existing run/step caps.
+
+        Mutation clicks must go through capture/execute and the selected arm.
+        Transport exceptions remain exceptions, never fabricated authority events.
+        """
+        validate_action(action)
+        if action.kind == "click" or action.intent is not None:
+            raise ValueError("mutation requires captured intent and recovery arm")
+        if not isinstance(self.port, InteractionPort):
+            raise ValueError("closed interaction bridge unavailable")
+        started, deadline = self._begin()
+        if action.kind == "wait" and started + action.duration_ms * 1_000_000 >= deadline:
+            raise CapExceeded("wait exceeds method/run allowance")
+        request_id, outcome = uuid4().hex, "unknown"
+        try:
+            receipt = self.port.interact(action, request_id, deadline)
+            completed = self._now()
+            if (not isinstance(receipt, InteractionReceipt)
+                    or (receipt.request_id, receipt.run_id, receipt.epoch, receipt.clock_id) != (
+                        request_id, self.public.run_id, self.public.epoch, self.clock_id)
+                    or not started <= receipt.response_ns <= completed
+                    or receipt.status not in {"acknowledged", "unknown"}):
+                raise InvalidEvidence("unbound browser interaction receipt")
+            if completed >= deadline:
+                raise CapExceeded("browser interaction deadline exceeded")
+            if action.kind == "wait" and completed < started + action.duration_ms * 1_000_000:
+                raise InvalidEvidence("browser wait was not performed")
+            outcome = receipt.status
+            return receipt
+        finally:
+            self.steps.append(Step(action.kind, request_id, "agent_direct", started,
+                                   self._now(), outcome))
 
     def capture(self, operation: str, target_id: str,
                 payload: tuple[tuple[str, str], ...], target: Target,

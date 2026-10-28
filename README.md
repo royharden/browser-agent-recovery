@@ -1,29 +1,38 @@
 # browser-agent-recovery
 
-M18 first source milestone. **Dirty Mode construction; runtime unverified.**
+M18 source construction. **Dirty Mode; runtime unverified.** All model cells are
+**not yet measured**. This source is not a qualified keyless instrument.
 
-Authoritative adopted plan: `../planning/promoted/PLAN-M18-v1.md`. Coordination and transcripts remain outside this product repository.
+The standard-library Python 3.12+ foundation includes public contracts, a
+transactional SQLite authority, original F1 order/F2 ticket/F3 delete development
+adapters and HTML, visible-history verification, semantic re-resolution, and
+bounded host recovery. Closed action/snapshot, browser-routing and scripted
+solver source are part of the current construction package; their integration
+and execution remain unverified. No sealed F4/FH implementation is included.
 
-Includes original Python public contracts, a transactional SQLite authority,
-F1 order/F2 ticket/F3 delete development task adapters and HTML, visible-history
-verification, unique semantic re-resolution and a bounded reconciliation state
-machine. Repeated orders/tickets retain extra effects; repeated deletion is an
-attempt without an additional mutation. No sealed F4/FH implementation exists.
+The rlab console entry point routes tasks, run, matrix, freeze, report,
+verify-report, and admit. Fixture is the default mode. Trusted fixture,
+admission and provider integrations remain pending: default execution commands
+return nonzero unavailable status, and live mode fails closed. The CLI does not
+start a server or browser. See [CLI source and deferred activation](docs/CLI.md),
+[foundation interfaces](docs/INTERFACES.md), and [host recovery](docs/HOST-RECOVERY.md).
 
-Source is under `src/rlab`. Python 3.12+ is the target; the foundation uses only
-the standard library. No dependency lock was generated or tooling installed.
-Future trusted integration imports `Authority` and `DevelopmentTask`, creates
-an absolute authority-owned SQLite path **outside OneDrive**, calls `observe`,
-and passes closed executor actions into `action`. No command starts a server in
-this milestone. See [interface and integration notes](docs/INTERFACES.md).
+Reports use the provisional fixed evaluation.report operator facade outside
+the distributable src/rlab wheel. An absent evaluator produces an unavailable
+error. Report generation, verification, matrices and solvers have not been run.
+Spec-bearing JSON and HTML are private operator artifacts; retain them outside
+this product tree and out of actor observations/public demo bundles. Verification
+requires independently trusted pins and expected-input digest anchors.
 
-Static syntax parsing and source review are the only allowed validation in this
-phase. Unit/transaction/concurrency/browser tests, admission and worker isolation,
-fault injection, lag-grid qualification, scoring, report generation and policy
-matrix execution remain deferred. This is not a qualified keyless instrument.
-All model cells are **not yet measured**; no outcomes or budget-control acceptance
-are claimed. No keys, accounts, spend, installs, network calls, push or publication.
+Only static syntax/diff inspection and source review are allowed in this phase.
+Runtime tests, browser/worker isolation, trusted bridge installation, fault/lag
+qualification, scoring, admission and joined producer/consumer validation remain
+deferred. No dependency lock was generated, tooling installed, model called,
+key/account configured, server started, remote pushed or artifact published.
+Dependencies remain empty; no licence clearance is asserted. Independent
+authorship/data admission, licence clearance and private oracle qualification
+remain pending Roy; source construction does not mark these gates PASS.
 
-Independent authorship/data admission, licence clearance and private oracle
-qualification remain pending Roy. Current launch grants static development source
-despite historical preimplementation gates; it does not mark those gates PASS.
+Authoritative adopted plan: ../planning/promoted/PLAN-M18-v1.md. Coordination
+and transcripts remain outside this product repository. The authority-owned
+SQLite path must eventually be absolute and outside OneDrive.

@@ -1,6 +1,9 @@
 """Trusted executor ports; implementations must honor absolute deadlines."""
 from dataclasses import dataclass
-from typing import Literal, Protocol
+from typing import TYPE_CHECKING, Literal, Protocol, runtime_checkable
+
+if TYPE_CHECKING:
+    from .actions import Action
 
 from .contracts import HistoryRead, Intent, Origin, PublicTask
 from .views import Page
@@ -26,6 +29,25 @@ class ActionReceipt:
     response_ns: int
     status: Literal["acknowledged", "failed", "unchanged", "unknown"]
     error: str = ""
+
+
+@dataclass(frozen=True)
+class InteractionReceipt:
+    """Trusted browser interaction timing; not a server mutation/effect event."""
+    request_id: str
+    run_id: str
+    epoch: str
+    clock_id: str
+    response_ns: int
+    status: Literal["acknowledged", "unknown"]
+    url: str
+    error: str = ""
+
+
+@runtime_checkable
+class InteractionPort(Protocol):
+    def interact(self, action: "Action", request_id: str,
+                 deadline_ns: int) -> InteractionReceipt: ...
 
 
 class BrowserPort(Protocol):
