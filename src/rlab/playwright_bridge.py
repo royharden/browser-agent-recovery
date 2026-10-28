@@ -97,7 +97,14 @@ class PlaywrightBridge:
             if "attachment" in response.headers.get("content-disposition", "").lower():
                 raise ValueError("download response refused")
             self._timeout(self._operation_deadline)
-            route.fulfill(response=response)
+            if request.method == "POST":
+                # The task's JSON receipt is delivered through authoritative
+                # IPC. Keep the current native document/refs for R1 and later
+                # public observation instead of navigating it to receipt JSON.
+                # This transport response never determines action success.
+                route.fulfill(status=204, headers={"cache-control": "no-store"}, body="")
+            else:
+                route.fulfill(response=response)
         except Exception as exc:
             self._route_error = type(exc).__name__
             route.abort("blockedbyclient")

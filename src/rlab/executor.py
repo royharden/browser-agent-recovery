@@ -283,6 +283,11 @@ class Executor:
                     raise CapExceeded("preparatory operation exceeded deadline")
                 outcome = success
                 return value
+            except PreparedCancellationError as exc:
+                # Preserve typed failed cleanup before fallible final timing
+                # can replace the exception and hide the pending request.
+                self._remember_cleanup_failure(exc)
+                raise
             finally:
                 self.steps.append(Step(kind, request_id, origin, started, self._now(), outcome))
         return operation

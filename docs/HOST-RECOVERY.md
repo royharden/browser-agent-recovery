@@ -295,3 +295,10 @@ public payload; they are never filled. Button/form/field reads and editable Body
 fills have separate counted boundaries. Legacy bridges without the submission
 hook retain their previous native operation path. Successful preparation ownership
 is retained before post-call clock/cap checks so later failure still cleans up.
+
+The browser transport consumes the real POST response and fulfils only an empty
+204 to the page, preserving its native document/refs for R1 instead of navigating
+to TaskHost receipt JSON. Actual action status/time remain exclusively the peer's
+retained terminal receipt. No reload, semantic target search, changed server effect
+or acknowledgement inference follows from this transport-only response. Typed
+cleanup failure is latched before fallible final clock accounting can mask it.
