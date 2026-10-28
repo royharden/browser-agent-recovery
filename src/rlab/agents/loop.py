@@ -8,6 +8,7 @@ from uuid import uuid4
 from ..providers import (Action, Limits, ProviderPort, ProviderResult,
                          action_schema, make_request, parse_action)
 from ..providers.port import canonical
+from .prompts import PromptUnavailable, render_prompt_messages, select_prompt_profile
 
 
 @dataclass(frozen=True)
@@ -115,14 +116,27 @@ class LoopResult:
 
 def run_offline(provider: ProviderPort, port: ActionPort, *, model_id: str,
                 provider_limits: Limits = Limits(), limits: LoopLimits = LoopLimits(),
-                request_id_factory: Callable[[], str] | None = None) -> LoopResult:
+                request_id_factory: Callable[[], str] | None = None,
+                arm: str = "R0", source_kind: str = "mock", stage: str = "mock",
+                cleared_prompt_profiles: frozenset[str] | set[str] | tuple[str, ...] | None = None,
+                ) -> LoopResult:
     """No implicit retry. finish is actor termination, never server-truth success.
 
     Production timeout/isolation enforcement belongs to the trusted adapter;
     an in-process call cannot be forcibly interrupted by this source loop.
     Replay may supply an exact trusted recorded request-ID stream. It must also
     supply matching public observations; no binding is relaxed to make replay fit.
+    Existing call signatures remain accepted, but omitted or unavailable external
+    prompt clearance returns not_executed before touching provider or action port.
+    arm selects instructions only; recovery wrappers remain the executor's job.
     """
+    try:
+        prompt_profile = select_prompt_profile(arm=arm, source_kind=source_kind,
+                                              stage=stage,
+                                              cleared_prompt_profiles=cleared_prompt_profiles)
+    except PromptUnavailable as exc:
+        return LoopResult("not_executed", 0, 0,
+                          (LoopStep("", None, None, None, str(exc)),))
     if type(provider_limits) is not Limits or type(limits) is not LoopLimits:
         raise ValueError("closed provider/loop limits required")
     if getattr(provider, "mode", None) not in {"authored_mock", "strict_replay"}:
@@ -183,11 +197,8 @@ def run_offline(provider: ProviderPort, port: ActionPort, *, model_id: str,
             if now()+provider_limits.deadline_ms*1_000_000 > deadline:
                 attempts.append(LoopStep(request_id, observation.digest, None, None, "call_deadline_bound"))
                 return result("deadline")
-            messages = [{"role": "system", "content": "Choose one closed public action. No private truth is available."},
-                        {"role": "user", "content": canonical({"goal": observation.goal,
-                         "snapshot_epoch": observation.snapshot_epoch,
-                         "snapshot": json.loads(observation.snapshot_json),
-                         "allowed_paths": observation.allowed_paths, "previous_feedback": last_feedback})}]
+            messages = render_prompt_messages(prompt_profile, observation, last_feedback,
+                                              provider_limits, limits)
             expected = make_request(messages, action_schema(), model_id, provider_limits,
                                     request_id=request_id, observation_digest=observation.digest)
             calls += 1
