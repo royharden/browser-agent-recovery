@@ -115,22 +115,25 @@ class BrowserAdapter:
                 deadline_ns: int) -> ActionReceipt:
         # The trusted bridge must consume/cancel preparation even if its own
         # pre-dispatch deadline check rejects. Never synthesize server receipts.
-        self.policy.authorize(self.public.start_path + "/action", "POST")
         try:
+            self.policy.authorize(self.public.start_path + "/action", "POST")
             receipt = self.bridge.execute(intent, request_id, origin, deadline_ns)
+            if (not isinstance(receipt, ActionReceipt)
+                    or (receipt.request_id, receipt.run_id, receipt.epoch, receipt.clock_id) != (
+                        request_id, self.public.run_id, self.public.epoch, self.clock_id)
+                    or type(receipt.response_ns) is not int or receipt.response_ns < 0
+                    or type(receipt.status) is not str
+                    or receipt.status not in {"acknowledged", "failed", "unchanged", "unknown"}):
+                raise UnboundActionResponse(request_id)
+            return receipt
         except PreparedCancellationError:
+            raise
+        except UnboundActionResponse:
             raise
         except Exception as exc:
             # A browser/pipe timeout does not prove the server's POST finished.
             # No synthetic response time, history reconciliation or retry is safe.
             raise UnboundActionResponse(request_id) from exc
-        if (not isinstance(receipt, ActionReceipt)
-                or (receipt.request_id, receipt.run_id, receipt.epoch, receipt.clock_id) != (
-                    request_id, self.public.run_id, self.public.epoch, self.clock_id)
-                or type(receipt.response_ns) is not int or receipt.response_ns < 0
-                or receipt.status not in {"acknowledged", "failed", "unchanged", "unknown"}):
-            raise UnboundActionResponse(request_id)
-        return receipt
 
     def history(self, request_id: str, deadline_ns: int) -> HistoryRead:
         self._check(deadline_ns)

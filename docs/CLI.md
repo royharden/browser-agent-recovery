@@ -29,12 +29,40 @@ loads a plugin from an artifact, or exposes arbitrary shell/JS/network tools.
 FixtureRequest contains only public selection/caps/seed. FixturePort declares
 run(request), matrix(request), and freeze(request), each returning a
 PortResult(status, detail, artifact=None) with status complete/pending/unavailable.
-AdmissionPort.admit(manifest) returns the same type; ProviderPort.readiness()
-is a declared future seam. Trusted Python embedding may call
+ProviderPort.readiness() is a declared future seam. Trusted Python embedding may call
 main(argv, ports=OperatorPorts(...)). No command-line backend loader exists.
 The normal console entry point injects no ports and never fabricates execution
 success. The future fixture producer must use the public action/snapshot path;
 these protocols do not implement a solver or hidden expected data.
+
+The future fixture producer must require a real admission PASS before executing
+any fixture or live mode; explicit FAIL skips every execution mode. There is no
+joined fixture/admission/provider loop yet. Injecting a fixture port is a trusted
+integration responsibility and must not bypass the producer's admission gate.
+
+Admission uses the provisional injected facade only; no changing admission module
+is imported or copied:
+
+    admit(document, *, expected_hashes, builder_ids, trusted_ids=())
+        -> AdmissionDecision(state, reasons), with to_dict()
+
+The closed decision states are PASS, PENDING and FAIL. The CLI accepts
+--manifest plus independently selected --expected-hashes, --builder-ids and
+optional --trusted-ids files. Expected hashes are a JSON object with 1..64 keys
+matching [A-Za-z0-9][A-Za-z0-9_.-]{0,63}, each mapping to one lowercase SHA256.
+Identity files contain JSON lists of at most 128 unique printable ASCII strings,
+each 1..128 characters without surrounding whitespace. Duplicate JSON object
+keys are rejected. The manifest must be a different file from every anchor,
+including symlink/hardlink aliases. Trusted identity provenance is externally
+verified by the operator; self-declared receipt identities are not trust anchors.
+Neither identity lists nor expected hashes are derived from manifest contents.
+
+Missing hash/builder anchors, empty builder IDs, or omitted/empty trusted IDs
+return PENDING with exit 3. A missing producer returns unavailable/exit 3.
+An actual producer decision maps PASS to exit 0, PENDING to 3, FAIL to 2. The
+console includes the explicit state, but withholds private reasons and inputs.
+Admission PASS is not runtime acceptance. Producer schemas and the joined public
+observation/action loop still require reconciliation against D2's final facade.
 
 Report input flags are --schedule, --records, --pins, --config, and
 --price, all separately selected JSON files. Schedule shape and private record,

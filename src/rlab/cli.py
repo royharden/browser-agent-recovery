@@ -37,14 +37,29 @@ class PortResult:
 
 
 class FixturePort(Protocol):
-    """Trusted host owns orchestration through public actions and snapshots."""
+    """Trusted host owns public action/snapshot orchestration and admission gate.
+
+    Future producers must require a real admission PASS before execution, and
+    skip every mode on FAIL. Joined admission/provider loop is unresolved.
+    """
     def run(self, request: FixtureRequest) -> PortResult: ...
     def matrix(self, request: FixtureRequest) -> PortResult: ...
     def freeze(self, request: FixtureRequest) -> PortResult: ...
 
 
+class AdmissionDecision(Protocol):
+    @property
+    def state(self) -> Literal["PASS", "PENDING", "FAIL"]: ...
+    @property
+    def reasons(self) -> tuple[str, ...]: ...
+    def to_dict(self) -> Mapping[str, Any]: ...
+
+
 class AdmissionPort(Protocol):
-    def admit(self, manifest: Mapping[str, Any]) -> PortResult: ...
+    def admit(
+        self, document: Mapping[str, Any], *, expected_hashes: Mapping[str, str],
+        builder_ids: Sequence[str], trusted_ids: Sequence[str] = (),
+    ) -> AdmissionDecision: ...
 
 
 class ProviderPort(Protocol):
@@ -97,6 +112,31 @@ def _pins(path: Path) -> dict[str, str]:
         for item in value.values()
     ):
         raise ValueError("pins require source/schedule/oracle/config/price lowercase SHA256")
+    return value
+
+
+def _identifier(value: Any) -> bool:
+    return (isinstance(value, str) and 1 <= len(value) <= 128
+            and value == value.strip() and all(32 <= ord(char) <= 126 for char in value))
+
+
+def _identities(path: Path) -> tuple[str, ...]:
+    value = _json(path)
+    if (not isinstance(value, list) or len(value) > 128
+            or not all(_identifier(item) for item in value)
+            or len(set(value)) != len(value)):
+        raise ValueError("identities require at most 128 unique bounded ASCII strings")
+    return tuple(value)
+
+
+def _expected_hashes(path: Path) -> dict[str, str]:
+    value = _mapping(path)
+    if (not 1 <= len(value) <= 64 or any(
+        re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,63}", key) is None
+        or not isinstance(digest, str) or SHA256.fullmatch(digest) is None
+        for key, digest in value.items()
+    )):
+        raise ValueError("expected hashes require 1..64 bounded names and lowercase SHA256 values")
     return value
 
 
@@ -183,6 +223,9 @@ def _parser() -> argparse.ArgumentParser:
     verify.add_argument("--expected-inputs-sha256", required=True, type=Path)
     admit = commands.add_parser("admit")
     admit.add_argument("--manifest", required=True, type=Path)
+    admit.add_argument("--expected-hashes", type=Path)
+    admit.add_argument("--builder-ids", type=Path)
+    admit.add_argument("--trusted-ids", type=Path)
     return parser
 
 
@@ -228,11 +271,39 @@ def main(argv: Sequence[str] | None = None, *, ports: OperatorPorts | None = Non
                 _emit("complete", result.detail, execution="unknown")
             return 0
         if args.command == "admit":
+            if args.expected_hashes is None or args.builder_ids is None:
+                _emit("pending", "Admission requires independently selected expected hashes and builder IDs",
+                      state="PENDING")
+                return 3
+            manifest_path = args.manifest.resolve(strict=True)
+            anchor_paths = [args.expected_hashes, args.builder_ids]
+            if args.trusted_ids is not None:
+                anchor_paths.append(args.trusted_ids)
+            if any(manifest_path.samefile(path.resolve(strict=True)) for path in anchor_paths):
+                raise ValueError("manifest must be distinct from operator anchor files")
+            expected_hashes = _expected_hashes(args.expected_hashes)
+            builder_ids = _identities(args.builder_ids)
+            trusted_ids = () if args.trusted_ids is None else _identities(args.trusted_ids)
+            if not builder_ids or not trusted_ids:
+                _emit("pending", "Externally verified builder/trusted identities are required",
+                      state="PENDING")
+                return 3
             if ports.admission is None:
-                raise UnavailableError("admission PENDING: trusted custodian admission backend unavailable")
-            result = ports.admission.admit(_mapping(args.manifest))
-            _emit(result.status, result.detail)
-            return 0 if result.status == "complete" else 3
+                _emit("unavailable", "Trusted custodian admission backend unavailable", state="PENDING")
+                return 3
+            decision = ports.admission.admit(
+                _mapping(manifest_path), expected_hashes=expected_hashes,
+                builder_ids=builder_ids, trusted_ids=trusted_ids,
+            )
+            if (decision.state not in ("PASS", "PENDING", "FAIL")
+                    or not isinstance(decision.reasons, tuple) or len(decision.reasons) > 64
+                    or any(not isinstance(reason, str) or len(reason) > 1024
+                           for reason in decision.reasons)):
+                raise ValueError("admission returned an invalid decision")
+            # Private reasons/receipt IDs remain inside the trusted operator boundary.
+            _emit(decision.state.lower(), "Admission decision; no runtime acceptance",
+                  state=decision.state)
+            return {"PASS": 0, "PENDING": 3, "FAIL": 2}[decision.state]
         if args.command == "verify-report":
             report_path = args.report.resolve(strict=True)
             anchors = (args.trusted_pins.resolve(strict=True), args.expected_inputs_sha256.resolve(strict=True))
