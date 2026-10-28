@@ -11,7 +11,7 @@ from uuid import uuid4
 
 from .contracts import HistoryRead, Intent, Origin
 from .driver import DevelopmentTask
-from .ports import ActionReceipt
+from .ports import ActionReceipt, PreparedCancellationError
 from .views import Page
 
 
@@ -56,7 +56,12 @@ class LocalTaskPort:
 
     def cancel_action(self, request_id: str) -> None:
         """Trusted non-mutation cleanup, allowed after an action deadline."""
-        self.task.cancel_action(request_id)
+        try:
+            self.task.cancel_action(request_id)
+        except Exception as exc:
+            # Keep the marker even when cleanup's actual disposition is unknown.
+            self._prepared_request = request_id
+            raise PreparedCancellationError(request_id) from exc
         if self._prepared_request == request_id:
             self._prepared_request = None
 
@@ -225,6 +230,9 @@ class TaskHost:
                                         context.origin, deadline_ns)
             code = "200 OK" if receipt.status == "acknowledged" else "409 Conflict"
             return response(code, json.dumps(asdict(receipt)))
+        except PreparedCancellationError:
+            return response("503 Service Unavailable",
+                            '{"error":"prepared action cleanup failed; trusted reconciliation required"}')
         except (ValueError, UnicodeError, TimeoutError):
             return response("400 Bad Request",
                             '{"error":"invalid form, run state or deadline"}')

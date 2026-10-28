@@ -56,6 +56,17 @@ consumes its preparation, even when confirmation is lost; it is never cancelled
 as a substitute for history reconciliation. A local preparation that overruns
 its deadline cancels before propagating the timeout.
 
+Cleanup failure has a distinct `PreparedCancellationError` port contract. The
+local adapter retains its pending marker and propagates that error, including
+when cancellation follows a pre-dispatch deadline or preparation overrun.
+The executor preserves `pending_cleanup_request_ids`, returns `harness_unknown`
+without history reconciliation or mutation retry, and refuses further port
+operations until a trusted owner reconciles the pending state. It does not
+automatically retry failed cleanup. This metadata is separate from confirmed
+`cancelled_request_ids`; failed cleanup never counts as successful cancellation.
+The WSGI surface returns a service-unavailable error for this condition. These
+are source guarantees requiring later runtime qualification.
+
 The producer installs deterministic STALE_ID remaps before guarded observation
 and reuses preparation for the same request ID; current source has no asynchronous
 onset after resolution. Its default acknowledgement is local page installation,

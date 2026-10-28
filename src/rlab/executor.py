@@ -11,7 +11,7 @@ from urllib.parse import unquote, urlsplit
 from uuid import uuid4
 
 from .contracts import FailedAction, HistoryRead, Intent, Origin, Target
-from .ports import ActionReceipt, BrowserPort
+from .ports import ActionReceipt, BrowserPort, PreparedCancellationError
 from .recovery import Reconciliation, resolve
 from .views import Page
 
@@ -38,6 +38,7 @@ class ExecutionResult:
     steps: tuple[Step, ...]
     reason: str = ""
     cancelled_request_ids: tuple[str, ...] = ()
+    pending_cleanup_request_ids: tuple[str, ...] = ()
 
 
 class CapExceeded(Exception):
@@ -105,6 +106,7 @@ class Executor:
         self._captured: dict[str, Intent] = {}
         self._used: set[str] = set()
         self._prepared_request: str | None = None
+        self._cleanup_error: str | None = None
 
     def _now(self) -> int:
         now = self.port.now_ns()
@@ -115,6 +117,8 @@ class Executor:
         return now
 
     def _begin(self, end_ns: int | None = None) -> tuple[int, int]:
+        if self._cleanup_error is not None:
+            raise InvalidEvidence(self._cleanup_error)
         now = self._now()
         deadline = min(self.deadline_ns, now + self.action_budget_ns,
                        end_ns if end_ns is not None else self.deadline_ns)
@@ -214,17 +218,20 @@ class Executor:
         outcome = "unknown"
         try:
             try:
-                try:
-                    receipt = self.port.execute(intent, request_id, origin, deadline)
-                finally:
-                    # Port consumes or cancels preparation on every issued call,
-                    # including its pre-dispatch deadline rejection.
-                    if self._prepared_request == request_id:
-                        self._prepared_request = None
+                receipt = self.port.execute(intent, request_id, origin, deadline)
+            except PreparedCancellationError:
+                # Do not erase pending state or reinterpret failed cleanup as a
+                # lost mutation confirmation eligible for history/retry.
+                raise
             except Exception as exc:
+                if self._prepared_request == request_id:
+                    self._prepared_request = None
                 # Dispatch may already have changed server state; no no-effect inference.
                 receipt = ActionReceipt(request_id, self.public.run_id, self.public.epoch,
                                         self.clock_id, self._now(), "unknown", type(exc).__name__)
+            else:
+                if self._prepared_request == request_id:
+                    self._prepared_request = None
             completed = self._now()
             if (not isinstance(receipt, ActionReceipt)
                     or (receipt.request_id, receipt.run_id, receipt.epoch, receipt.clock_id) != (
@@ -264,6 +271,10 @@ class Executor:
     def execute(self, intent: Intent, arm: Arm) -> ExecutionResult:
         if arm not in {"R0", "R1", "R2", "R3", "R23"}:
             raise ValueError("unknown recovery arm")
+        if self._cleanup_error is not None:
+            pending = (self._prepared_request,) if self._prepared_request is not None else ()
+            return ExecutionResult(intent.root_intent_id, arm, "harness_unknown", (), (),
+                                   self._cleanup_error, (), pending)
         if self._captured.get(intent.root_intent_id) != intent or intent.root_intent_id in self._used:
             raise ValueError("use an unconsumed executor-captured intent")
         self._used.add(intent.root_intent_id)
@@ -273,19 +284,23 @@ class Executor:
 
         def result(state: Disposition, reason: str = "") -> ExecutionResult:
             cancelled: tuple[str, ...] = ()
-            if self._prepared_request is not None:
+            if self._prepared_request is not None and self._cleanup_error is None:
                 pending = self._prepared_request
-                self._prepared_request = None
                 try:
                     # Trusted non-effect cleanup is not a browser operation;
                     # release pending state even after cap/expiry/refusal.
                     self.port.cancel_action(pending)
                     cancelled = (pending,)
                 except Exception as exc:
-                    state = "harness_unknown"
-                    reason = "prepared cancellation failed: " + type(exc).__name__
+                    self._cleanup_error = "prepared cancellation failed: " + type(exc).__name__
+                else:
+                    self._prepared_request = None
+            if self._cleanup_error is not None:
+                state, reason = "harness_unknown", self._cleanup_error
+            pending_cleanup = ((self._prepared_request,)
+                               if self._prepared_request is not None else ())
             return ExecutionResult(intent.root_intent_id, arm, state, tuple(receipts),
-                                   tuple(self.steps[first_step:]), reason, cancelled)
+                                   tuple(self.steps[first_step:]), reason, cancelled, pending_cleanup)
 
         try:
             guarded = arm in {"R3", "R23"}
@@ -332,6 +347,10 @@ class Executor:
                         retried.run_id, retried.epoch, retried.clock_id, retried.response_ns))
                 else:
                     self._wait(self.poll_wait_ns, recovery_end)
+        except PreparedCancellationError as exc:
+            self._prepared_request = exc.request_id
+            self._cleanup_error = "prepared cancellation failed: trusted reconciliation required"
+            return result("harness_unknown", self._cleanup_error)
         except (CapExceeded, TimeoutError) as exc:
             # Adapter wait/observe methods can raise at their post-call check.
             # Preserve the recovery disposition even when that lower layer did
