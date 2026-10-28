@@ -11,3 +11,9 @@ excluded. The missing canonical public event envelope is explicitly unsupported.
 
 Generation and conformance checks are deferred. A schema is not data admission,
 a measured result, worker isolation or instrument acceptance.
+
+Packaging discovery explicitly excludes evaluation/heldout/held_out packages
+under rlab and their descendants, with implicit package-data inclusion disabled.
+The source-only boundary checker reports a clear declared scope at this revision;
+no wheel was built or installed, and schema JSON has not been generated. Future
+distribution of generated resources needs an explicit packaging decision.

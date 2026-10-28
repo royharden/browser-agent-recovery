@@ -59,3 +59,19 @@ in source. It is static guidance only; it cannot qualify worker UID/ACL/egress,
 secret denial, custody, admission, installed wheel contents or runtime isolation.
 Packaging findings must be repaired by the packaging owner, not suppressed to
 produce a clean report. See the script's --help for later operational usage.
+
+The packaging policy now explicitly excludes `rlab.evaluation`, `rlab.heldout`
+and `rlab.held_out`, including all their package descendants. Package-data
+inclusion is explicitly disabled; ordinary runtime Python modules, including
+admission, providers, agents and public_schema, retain the existing discovery
+rule. Top-level operator evaluation is outside the `src`/`rlab*` discovery scope.
+This narrows intended discovery; it does not attest to private files' existence
+or absence. Future intentional resource files need an explicit packaging review.
+
+At this source composition the unchanged read-only checker parsed 27 modules,
+13 public roots and 14 transitive modules, with zero violations/unknowns and
+exit 0 (`static_scope_clear`). This closes the earlier six hypothetical package
+inclusion findings and default package-data unknown at the source-policy level.
+It is not an installed-wheel, runtime isolation or independent acceptance result.
+Wheel build/content inspection and final combined-source reconciliation remain
+deferred; the public event-envelope gap remains explicitly unsupported.
