@@ -1,0 +1,299 @@
+"""Trusted, bounded mutation controller over public BrowserPort evidence.
+
+No model, authority, task-spec or evaluation access. This is source for the
+controller, not a browser worker or a demonstrated process isolation boundary.
+An adapter must enforce each supplied absolute deadline; synchronous Python
+cannot preempt an adapter that ignores it.
+"""
+from dataclasses import dataclass, replace
+from typing import Literal
+from urllib.parse import unquote, urlsplit
+from uuid import uuid4
+
+from .contracts import FailedAction, HistoryRead, Intent, Origin, Target
+from .ports import ActionReceipt, BrowserPort
+from .recovery import Reconciliation, resolve
+from .views import Page
+
+Arm = Literal["R0", "R1", "R2", "R3", "R23"]
+Disposition = Literal["acknowledged", "committed", "returned", "abstained", "cap_abort", "harness_unknown"]
+
+
+@dataclass(frozen=True)
+class Step:
+    kind: str
+    request_id: str
+    origin: Origin
+    started_ns: int
+    completed_ns: int
+    outcome: str
+
+
+@dataclass(frozen=True)
+class ExecutionResult:
+    root_intent_id: str
+    arm: Arm
+    disposition: Disposition
+    receipts: tuple[ActionReceipt, ...]
+    steps: tuple[Step, ...]
+    reason: str = ""
+
+
+class CapExceeded(Exception):
+    """An operation was refused before dispatch or exceeded a trusted limit."""
+
+
+class InvalidEvidence(Exception):
+    """Adapter identity/timing cannot support a recovery decision."""
+
+
+def allowed_path(path: str, start_path: str) -> bool:
+    """Closed task routes only; no URLs, encoding tricks, admin or other runs.
+
+    A future navigation bridge must also check actual origin, redirects, method,
+    downloads and uploads. This lexical helper alone is not network isolation.
+    """
+    if not isinstance(path, str) or not isinstance(start_path, str):
+        return False
+    if any(c in path for c in ("%", "\\", "\x00", "\r", "\n", "\t")):
+        return False
+    parsed = urlsplit(path)
+    return (path.startswith("/") and not path.startswith("//")
+            and not parsed.scheme and not parsed.netloc and not parsed.query
+            and not parsed.fragment and unquote(path) == path
+            and all(part not in {".", ".."} for part in path.split("/"))
+            and path in {start_path, start_path + "/history", start_path + "/action"})
+
+
+class Executor:
+    """One run/epoch, shared caps and one automatic retry per root intent.
+
+    Every observe, history read, wait and mutation consumes one of at most 40
+    operation slots, including failures and controller work. Root IDs are
+    captured here and cannot be resubmitted to reset the wrapper's retry cap.
+    A later actor-issued direct action must get a new root (R0 may recover).
+    All retained payload fields originate in the initial visible action.
+    """
+    def __init__(self, port: BrowserPort, *, max_actions: int = 40,
+                 run_budget_ns: int = 180_000_000_000,
+                 action_budget_ns: int = 3_000_000_000,
+                 reconciliation_budget_ns: int = 4_000_000_000,
+                 max_probes: int = 8, poll_wait_ns: int = 500_000_000):
+        values = (max_actions, port.public.max_actions, run_budget_ns,
+                  action_budget_ns, reconciliation_budget_ns, max_probes, poll_wait_ns)
+        if any(type(v) is not int or v <= 0 for v in values):
+            raise ValueError("positive integer limits required")
+        if not port.clock_id or not allowed_path(port.public.start_path, port.public.start_path):
+            raise ValueError("trusted clock and exact local start route required")
+        self.port = port
+        self.public = port.public
+        self.clock_id = port.clock_id
+        self.started_ns = port.now_ns()
+        self.deadline_ns = self.started_ns + min(run_budget_ns, 180_000_000_000)
+        self.max_actions = min(max_actions, port.public.max_actions, 40)
+        self.action_budget_ns = min(action_budget_ns, 3_000_000_000)
+        self.reconciliation_budget_ns = reconciliation_budget_ns
+        self.max_probes = max_probes
+        self.poll_wait_ns = poll_wait_ns
+        self.steps: list[Step] = []
+        self._last_ns = self.started_ns
+        self._captured: dict[str, Intent] = {}
+        self._used: set[str] = set()
+
+    def _now(self) -> int:
+        now = self.port.now_ns()
+        if (self.port.clock_id != self.clock_id or self.port.public != self.public
+                or type(now) is not int or now < self._last_ns):
+            raise InvalidEvidence("run identity or monotonic clock changed")
+        self._last_ns = now
+        return now
+
+    def _begin(self, end_ns: int | None = None) -> tuple[int, int]:
+        now = self._now()
+        deadline = min(self.deadline_ns, now + self.action_budget_ns,
+                       end_ns if end_ns is not None else self.deadline_ns)
+        if now >= deadline or len(self.steps) >= self.max_actions:
+            raise CapExceeded("operation or absolute deadline exhausted")
+        return now, deadline
+
+    def _read(self, kind: str, end_ns: int | None = None) -> Page | HistoryRead:
+        started, deadline = self._begin(end_ns)
+        request_id = uuid4().hex
+        outcome = "unknown"
+        try:
+            value = (self.port.observe(deadline) if kind == "observe"
+                     else self.port.history(request_id, deadline))
+            completed = self._now()
+            if completed >= deadline:
+                raise CapExceeded("read exceeded deadline")
+            if kind == "observe":
+                if not isinstance(value, Page) or not value.snapshot_epoch:
+                    raise InvalidEvidence("invalid public snapshot")
+            elif (not isinstance(value, HistoryRead) or value.request_id != request_id
+                  or value.started_ns < started or value.completed_ns > completed):
+                raise InvalidEvidence("history not bound to issued read")
+            outcome = "received"
+            return value
+        finally:
+            self.steps.append(Step(kind, request_id, "controller_resolve", started,
+                                   self._now(), outcome))
+
+    def observe(self) -> Page:
+        """Actor snapshot acquisition shares the run's operation/time budget."""
+        page = self._read("observe")
+        assert isinstance(page, Page)
+        return page
+
+    def history(self) -> HistoryRead:
+        """Native actor history access; no implicit reconciliation or retry."""
+        read = self._read("history")
+        assert isinstance(read, HistoryRead)
+        return read
+
+    def capture(self, operation: str, target_id: str,
+                payload: tuple[tuple[str, str], ...], target: Target,
+                before_version: int) -> Intent:
+        """Capture public intent; never infer a target from private answers."""
+        if operation not in {"order", "ticket", "delete"}:
+            raise ValueError("unsupported development operation")
+        if (not isinstance(target_id, str) or not target_id
+                or type(before_version) is not int or before_version < 0
+                or not isinstance(target, Target) or not target.ref or not target.snapshot_epoch
+                or not isinstance(payload, tuple)
+                or any(not isinstance(p, tuple) or len(p) != 2
+                       or any(not isinstance(v, str) for v in p) for p in payload)
+                or len(dict(payload)) != len(payload) or tuple(sorted(payload)) != payload):
+            raise ValueError("invalid captured public intent")
+        intent = Intent(uuid4().hex, operation, target_id, payload, target, before_version)
+        self._captured[intent.root_intent_id] = intent
+        return intent
+
+    def _wait(self, duration_ns: int, end_ns: int | None = None) -> None:
+        started, deadline = self._begin(end_ns)
+        if started + duration_ns >= deadline:
+            raise CapExceeded("wait would exhaust absolute deadline")
+        outcome = "unknown"
+        try:
+            self.port.wait(duration_ns, deadline)
+            completed = self._now()
+            if completed < started + duration_ns:
+                raise InvalidEvidence("adapter did not perform requested wait")
+            if completed >= deadline:
+                raise CapExceeded("wait exceeded deadline")
+            outcome = "completed"
+        finally:
+            self.steps.append(Step("wait", uuid4().hex, "controller_resolve",
+                                   started, self._now(), outcome))
+
+    def _issue(self, intent: Intent, origin: Origin,
+               end_ns: int | None = None, request_id: str | None = None) -> ActionReceipt:
+        started, deadline = self._begin(end_ns)
+        request_id = request_id or uuid4().hex
+        outcome = "unknown"
+        try:
+            try:
+                receipt = self.port.execute(intent, request_id, origin, deadline)
+            except Exception as exc:
+                # Dispatch may already have changed server state; no no-effect inference.
+                receipt = ActionReceipt(request_id, self.public.run_id, self.public.epoch,
+                                        self.clock_id, self._now(), "unknown", type(exc).__name__)
+            completed = self._now()
+            if (not isinstance(receipt, ActionReceipt)
+                    or (receipt.request_id, receipt.run_id, receipt.epoch, receipt.clock_id) != (
+                        request_id, self.public.run_id, self.public.epoch, self.clock_id)
+                    or not started <= receipt.response_ns <= completed
+                    or receipt.status not in {"acknowledged", "failed", "unchanged", "unknown"}):
+                raise InvalidEvidence("mutation receipt identity/timing invalid")
+            if completed >= deadline:
+                receipt = replace(receipt, response_ns=completed, status="unknown",
+                                  error="mutation deadline exceeded; effect unknown")
+            outcome = receipt.status
+            return receipt
+        finally:
+            self.steps.append(Step("mutation", request_id, origin, started, self._now(), outcome))
+
+    def _guard(self, original: Intent, request_id: str,
+               end_ns: int | None = None) -> Intent | None:
+        # Expose a scheduled DOM boundary BEFORE fresh semantic resolution.
+        # The task reuses this ID at mutation, never preparing/firing twice.
+        started, deadline = self._begin(end_ns)
+        outcome = "unknown"
+        try:
+            self.port.prepare_action(request_id, deadline)
+            if self._now() >= deadline:
+                raise CapExceeded("preparation exceeded deadline")
+            outcome = "prepared"
+        finally:
+            self.steps.append(Step("prepare", request_id, "controller_resolve",
+                                   started, self._now(), outcome))
+        page = self._read("observe", end_ns)
+        assert isinstance(page, Page)
+        target = resolve(original, page.targets, page.snapshot_epoch)
+        # Only ref/snapshot change; intended operation, target and fields stay captured.
+        return replace(original, target=target) if target is not None else None
+
+    def execute(self, intent: Intent, arm: Arm) -> ExecutionResult:
+        if arm not in {"R0", "R1", "R2", "R3", "R23"}:
+            raise ValueError("unknown recovery arm")
+        if self._captured.get(intent.root_intent_id) != intent or intent.root_intent_id in self._used:
+            raise ValueError("use an unconsumed executor-captured intent")
+        self._used.add(intent.root_intent_id)
+        first_step = len(self.steps)
+        receipts: list[ActionReceipt] = []
+
+        def result(state: Disposition, reason: str = "") -> ExecutionResult:
+            return ExecutionResult(intent.root_intent_id, arm, state, tuple(receipts),
+                                   tuple(self.steps[first_step:]), reason)
+
+        try:
+            guarded = arm in {"R3", "R23"}
+            request_id = uuid4().hex
+            issued = self._guard(intent, request_id) if guarded else intent
+            if issued is None:
+                return result("abstained", "RERESOLVE_REFUSED")
+            receipt = self._issue(issued, "controller_resolve" if guarded else "agent_direct",
+                                  request_id=request_id)
+            receipts.append(receipt)
+            if receipt.status == "acknowledged":
+                return result("acknowledged")
+            if arm in {"R0", "R3"}:
+                return result("returned", receipt.error)
+            if arm == "R1":
+                self._wait(250_000_000)
+                # Exact same submitted ref and immutable fields; deliberately no R3.
+                retried = self._issue(issued, "controller_retry")
+                receipts.append(retried)
+                return result("acknowledged" if retried.status == "acknowledged" else "returned",
+                              retried.error)
+            failed = FailedAction(receipt.run_id, receipt.epoch, receipt.clock_id, receipt.response_ns)
+            reconciliation = Reconciliation(intent, failed, self.reconciliation_budget_ns,
+                                            self.max_probes)
+            recovery_end = min(self.deadline_ns, failed.response_ns + self.reconciliation_budget_ns)
+            while True:
+                read = self._read("history", recovery_end)
+                assert isinstance(read, HistoryRead)
+                decision = reconciliation.inspect(read, self._now())
+                if decision == "committed":
+                    return result("committed")
+                if decision == "abstain":
+                    return result("abstained", "AMBIGUOUS_ABSTENTION")
+                if decision == "retry_once":
+                    retry_id = uuid4().hex
+                    retry = self._guard(intent, retry_id, recovery_end) if guarded else intent
+                    if retry is None:
+                        return result("abstained", "RERESOLVE_REFUSED")
+                    retried = self._issue(retry, "controller_retry", recovery_end, retry_id)
+                    receipts.append(retried)
+                    if retried.status == "acknowledged":
+                        return result("acknowledged")
+                    reconciliation.retry_failed(FailedAction(
+                        retried.run_id, retried.epoch, retried.clock_id, retried.response_ns))
+                else:
+                    self._wait(self.poll_wait_ns, recovery_end)
+        except (CapExceeded, TimeoutError) as exc:
+            return result("cap_abort", str(exc))
+        except InvalidEvidence as exc:
+            return result("harness_unknown", str(exc))
+        except Exception as exc:
+            # Unexpected adapter faults never imply absence or restart recovery.
+            return result("harness_unknown", type(exc).__name__)
