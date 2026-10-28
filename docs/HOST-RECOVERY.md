@@ -338,3 +338,11 @@ and all available media. The helper never infers success from finish, acknowledg
 arm or favorable outcome. Unselected files stay private and undeleted; sampling
 reduces referenced video, not recorded storage. Unknown/partial captures are not
 retrospectively fabricated into media.
+
+The exact success rule is SHA256(UTF-8 paired/block key), first eight digest bytes
+interpreted unsigned big-endian, modulo10 equal to0. There is no random-number seed
+or per-arm input. Operators must retain their actual paired key independently to
+reproduce selection; the manifest does not authenticate that input. This nominal
+bucket rule is not a measured exact10% capture fraction for a finite run set.
+Manifest selection/status fields describe actual referenced/captured state; a
+disabled, partial or missing artifact never becomes successful capture by sampling.

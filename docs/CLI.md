@@ -234,3 +234,8 @@ evaluator does not permit ZIP links. Manifest-write/reference failures remain ty
 operator diagnostics with no invented link. Output and manifest directories must
 remain private; this source uploads/publishes/copies/deletes no media. No media flags
 or files have been exercised in Dirty Mode.
+
+Integrity scope: verify_report checks serialized report/input reference metadata;
+it does not verify the bytes of linked media or manifests. Capture SHA256 values
+alone are not authentication. A later media-byte integrity claim needs separately
+retained operator anchors and actual byte verification. None is claimed here.

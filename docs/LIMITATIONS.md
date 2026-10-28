@@ -133,3 +133,8 @@ remain private. A manifest or status failure cannot erase authority receipts or
 claim clean capture; operator results retain explicit errors independently of
 the evaluator's closed media-path list. Sampling requires an actual operator
 outcome and stable paired key, never actor finish or controller acknowledgement.
+
+Evaluator verification covers serialized reference metadata, not linked media or
+manifest bytes. Digests are capture observations, not authenticated independent
+anchors. No media-byte verification, independently authenticated key/outcome,
+measured finite-run10% statistic or qualified capture is claimed by this source.
