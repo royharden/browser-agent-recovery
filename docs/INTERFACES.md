@@ -1,7 +1,8 @@
 # Public and trusted interfaces
 
 Dirty Mode source construction; runtime unverified. API inventory baseline:
-a72e502788824d0ccd3e411642d84091697155a2. Canonical definitions and validators
+05e209f4f1c85f62d907916340bc684c207cab6f, with D4 public-record schema synchronization.
+Canonical definitions and validators
 own detailed behavior; this map is not instrument or independent acceptance.
 
 | Layer | Canonical source | Boundary |
@@ -45,22 +46,32 @@ The accepted public-record extraction removes the prior codec-to-controller
 dependency path: agents.session_codec now reads canonical public_records.
 Legacy ports/executor exports alias those exact classes; class __module__ now
 names rlab.public_records. No wire field/default/decorator changed in extraction.
-The corrected checker declares public_records PUBLIC and reports 37 modules,
+The public-record sync checker declared public_records PUBLIC and reported 37 modules,
 19 public roots and 20 transitive modules, zero findings/unknowns, exit 0. No
 actor/worker/controller exemption was added. This is a static source result,
 not an installed-wheel or runtime isolation result. See [schema mapping](CONTRACTS.md).
 
-Canonical activation has MISSING implementation: SourceProfile.require_activation,
-OwnedWorker.start and worker.main refuse; privileged launch, isolated browser IPC
-and complete worker control wiring have not been joined. The explicit
-in_process_convenience adapter does not implement these canonical paths.
-JoinedDevelopmentOrchestration.freeze refuses instead of producing a source
-schedule artifact. Final source pins await final accepted bytes and line endings;
-no schema generation, actual freeze or independent receipt was performed.
-At this accepted pin the next D1 browser_ipc/playwright_bridge and D3
-source_schedule packages remain IN PROGRESS, not accepted modules in this map.
-Possible later trusted-entry declarations must wait their accepted source delta;
-no advance checker exemption or source/runtime success is implied.
+Canonical activation still has MISSING privileged implementation:
+SourceProfile.require_activation and OwnedWorker.start refuse. No-argument
+worker.main refuses, while explicit WorkerConfig/WorkerCapabilities now select
+the accepted bounded public-channel control loop and typed owner/client source.
+This does not provision descriptors, start isolated workers or qualify enforcement.
+The in_process_convenience adapter implements none of those privileged mechanisms.
+
+Accepted browser_ipc.BrowserAuthorityIPC and playwright_bridge.PlaywrightBridge
+now provide fixed operator-side receipt-client/browser adapter source. The checker
+declares these two exact trusted ENTRY modules and forbids public imports of them;
+no actor exception was added. The combined scan reports 39 modules, 19 public
+roots, 20 transitive modules, zero findings/unknowns and exit 0. Actual transport,
+authenticated receipt peer, OS isolation and browser effects remain unqualified.
+The next browser_receipt_peer implementation is NOT accepted at this pin; it
+receives no speculative checker declaration or clean-source claim.
+
+The accepted D3 evaluation.source_schedule producer is now consumed by fixed
+CLI/backend source. It returns ready/pending/refused based on independent full-input
+anchors and typed admission. This is an implemented source path; no artifact was
+generated, and no research freeze or independent receipt exists. Final source
+pins await final accepted byte composition/line endings.
 Follow the owning documents for details:
 
 - [Host/recovery](HOST-RECOVERY.md): executor, browser and authority seams.
