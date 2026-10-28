@@ -57,7 +57,9 @@ artifact is loaded as executable code. Default backend is unavailable.
   IDs cannot be reused anywhere in this matrix. Reset must clean up internally
   if it raises before returning a lease; runner stops on uncertainty.
 - `execute(lease, row, config, deadline_ns) -> SealedRun(schedule_id, lease,
-  record)`. `row` contains only public schedule and metadata; config has explicit
+  record, provenance=None)`. Missing provenance is unknown and stops dispatch;
+  the default supports an explicit missing-data failure, never an empty receipt.
+  `row` contains only public schedule and metadata; config has explicit
   caps, matrix deadline and input digest. No private spec is passed to the actor
   or backend. Producer must support the chosen profile/actor/parser/lag/budget and
   refuse unavailable capabilities before acting. No silently substituted profile.
@@ -145,3 +147,75 @@ separation runtime checks; stop/caps/deadline/hanging-backend and invalid seal/r
 cases; full attempt/cost/media retention and process-interruption durability;
 report rebuild/tamper/private path/ACL/symlink/packaging checks; all matrices and
 browser/isolation/performance/unit/integration/E2E qualification. Runtime unverified.
+
+## Private rich-receipt sidecar (r2)
+
+Held initial matrix candidate omitted rich provider receipts; that source gap is
+repaired here, not reclassified as deferred runtime validation. D1 populates the
+new SealedRun.provenance field; D3 captures it BEFORE record/row/lease/media/oracle
+validation. The evaluator's closed six-field record stays unchanged. No actual
+provider/loop receipt has been generated during construction.
+
+Producer provenance is a JSON object with exactly:
+
+- schema: rlab.run-provenance.v1; source_kind: matches scheduled source.
+- state: recorded, unknown or not_applicable.
+- provider_attempts: actual list of JSON receipt objects, or null when unknown.
+- loop: actual detached loop receipt mapping, or null when unknown/inapplicable.
+- reason: string or null; unknown/not_applicable require a nonempty reason.
+
+Every actual provider attempt preserves at least request, binding, current_cost,
+source_cost, raw_usage, rejected_response, error and timings. Extra actual JSON
+fields (attempt index/mode/IDs/action/etc.) are preserved. Missing values are null,
+not fabricated usage/time/cost or verified billing. Binding retains original
+request ID, observation/schema/model/message/limit provenance; malformed requests
+may have request/binding null. The actual provider representation is normalized
+by D1 to JSON; the collector never calls repr, dataclass/asdict hooks or plugins.
+Recorded requires a provider_attempts list and loop mapping, even for a loop that
+made zero calls. Unknown may retain partial actual receipts plus reason and stops
+further dispatch. Scripted no-provider absence must be an explicit producer
+not_applicable declaration with provider_attempts=[], loop=null and reason; it is
+not inferred from a missing sidecar, and is never measured model evidence.
+
+Missing provenance remains unknown with an error. Native JSON builtins only:
+exact dict/list/str/int/float/bool/null; custom objects/subclasses are rejected
+without inspecting or invoking their representation. Cycles/nonfinite values and
+non-string keys are rejected. Integer size is bounded at128bits, depth24,
+8192 visited nodes,2048 members/container,131072 characters/string,64 declared
+provider attempts,2MiB serialized capture/run and64MiB retained full payload/matrix.
+Excess/invalid content becomes a bounded JSON-safe partial representation with
+explicit rejection metadata; string prefixes and omitted counts are labelled,
+never represented as complete original receipts. Error summaries for remaining
+rows add bounded overhead beyond the full-payload cap. No hash is claimed for
+unretained original bytes. Each capture hashes only its actual retained value.
+Producer must respect these bounds; oversized required evidence needs a future
+explicit archive-reference contract, never silent truncation advertised as full.
+
+Result schema is rlab.matrix-result.v2. provenance maps every scheduled ID to a
+capture; not_executed rows have value=null, no fabricated attempt list, and exact
+reason/arm/source/model/stage remain in lifecycle+schedule. Attempted reset/execute
+without returned data is explicitly unknown. Malformed/missing/unknown returned
+sidecar stops further dispatch and makes the attempted evaluator row unknown;
+raw JSON and sidecar stay private even if seal/identity/media/report fails.
+Cleanup uncertainty does not overwrite returned provenance. Known current costs
+and original source costs stay separate; unknown/null source usage remains unknown.
+
+provenance_sha256 binds the whole per-row capture mapping; envelope sha256 binds
+it, report, failures and schedule metadata. The optional script prints both
+digests as an OPERATOR RETENTION interface after writing its private artifact.
+Retain them independently outside that artifact. Source helper
+verify_matrix_envelope(result, expected_envelope_sha256=EXTERNAL,
+expected_provenance_sha256=EXTERNAL) requires both externally selected lowercase
+SHA256 anchors and compares actual canonical contents. Never pass the result's
+own stored hashes as a substitute for externally retained anchors. This is
+integrity against selected inputs, not authentication, billing verification or
+human/data/instrument acceptance. Load bounded operator-private JSON before
+calling it. verify_report still covers ONLY its evaluator report/input pins and
+must be used separately; it does not verify this sidecar. No actual digest/result
+artifact or runtime verification has been produced in this phase.
+
+D1 actual normalization/population, cap/invalid/cycle/nonfinite/mutable-alias,
+media/identity/report/cleanup-failure retention and external-anchor tamper cases
+need later authorized runtime qualification. All existing independent, private
+release/redaction, backend, packaging and final composed source-pin gates remain.
+The sidecar is PRIVATE: no public export/redaction/publishing authority is given.

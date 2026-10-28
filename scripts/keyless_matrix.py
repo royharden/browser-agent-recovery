@@ -85,7 +85,11 @@ def main(argv: list[str] | None = None, *, port: MatrixRunPort | None = None,
             handle.write(canonical(result) + "\n")
         finally:
             signal.signal(signal.SIGINT, previous)
-    print("Private matrix artifact retained; runtime qualification remains unverified.")
+    # The operator retains these OUTSIDE the artifact as selected verification
+    # anchors. Printing them is not signature/custody or research acceptance.
+    print(canonical({"envelope_sha256": result["sha256"],
+                     "provenance_sha256": result["provenance_sha256"],
+                     "qualification": "runtime_unverified; private artifact"}))
     return 0
 
 

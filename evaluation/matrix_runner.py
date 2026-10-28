@@ -8,7 +8,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import hashlib
+import math
 from pathlib import Path
+import re
 from typing import Callable, Protocol
 
 from .freeze import canonical, digest, implementation_pins, load_json, require_pins
@@ -34,6 +36,7 @@ class SealedRun:
     schedule_id: str
     lease: RunLease
     record: dict
+    provenance: dict | None = None
 
 
 @dataclass(frozen=True)
@@ -69,6 +72,164 @@ class MatrixRunPort(Protocol):
 
 def _copy(value: object):
     return load_json(canonical(value))
+
+
+MAX_PROVENANCE_BYTES = 2 * 1024 * 1024
+MAX_MATRIX_PROVENANCE_BYTES = 64 * 1024 * 1024
+MAX_PROVENANCE_NODES = 8192
+ATTEMPT_FIELDS = {"request", "binding", "current_cost", "source_cost", "raw_usage",
+                  "rejected_response", "error", "timings"}
+
+
+def capture_provenance(value: object, *, source_kind: str, remaining_bytes: int) -> dict:
+    """Detach bounded native JSON without invoking producer repr/serializers.
+
+    Rejected content has a bounded partial representation, explicit errors and
+    digest of THAT retained representation, never a claimed hash of lost bytes.
+    No object hook, dataclass conversion, repr or plugin method is called.
+    """
+    errors: list[str] = []
+    active: set[int] = set()
+    nodes, encoded_bytes = 0, 0
+
+    def reject(reason: str) -> dict:
+        if reason not in errors and len(errors) < 24:
+            errors.append(reason)
+        return {"rejected": reason}
+
+    def walk(item: object, depth: int = 0):
+        nonlocal nodes, encoded_bytes
+        nodes += 1
+        if nodes > MAX_PROVENANCE_NODES:
+            return reject("node_limit")
+        if depth > 24:
+            return reject("depth_limit")
+        if encoded_bytes >= min(MAX_PROVENANCE_BYTES, remaining_bytes):
+            return reject("byte_limit")
+        kind = type(item)
+        if item is None or kind is bool:
+            encoded_bytes += 5
+            return item
+        if kind is int:
+            if item.bit_length() > 128:
+                return reject("integer_limit")
+            encoded_bytes += len(str(item))
+            return item
+        if kind is float:
+            if not math.isfinite(item):
+                return reject("nonfinite_number")
+            encoded_bytes += 32
+            return item
+        if kind is str:
+            if len(item) > 131072:
+                marker = reject("string_limit")
+                return {**marker, "prefix": item[:1024], "original_characters": len(item)}
+            encoded_bytes += len(canonical(item))
+            return item
+        if kind not in (dict, list):
+            return reject("non_json_type")
+        if id(item) in active:
+            return reject("cycle")
+        active.add(id(item))
+        try:
+            encoded_bytes += 2
+            if kind is list:
+                result = []
+                for index, child in enumerate(item):
+                    if index >= 2048 or nodes >= MAX_PROVENANCE_NODES or encoded_bytes >= min(
+                            MAX_PROVENANCE_BYTES, remaining_bytes):
+                        result.append({**reject("container_limit"), "omitted_items": len(item)-index})
+                        break
+                    result.append(walk(child, depth+1))
+                    encoded_bytes += 1
+                return result
+            result = {}
+            for index, (key, child) in enumerate(dict.items(item)):
+                if index >= 2048 or nodes >= MAX_PROVENANCE_NODES or encoded_bytes >= min(
+                        MAX_PROVENANCE_BYTES, remaining_bytes):
+                    reject("container_limit")
+                    break
+                if type(key) is not str or len(key) > 4096:
+                    reject("invalid_object_key")
+                    continue
+                encoded_bytes += len(canonical(key))+2
+                result[key] = walk(child, depth+1)
+            return result
+        finally:
+            active.remove(id(item))
+
+    if remaining_bytes < 4096:
+        retained = reject("matrix_provenance_limit")
+    else:
+        retained = walk(value)
+    state = "rejected" if errors else "unknown"
+    if not errors:
+        if value is None:
+            errors.append("provider_provenance_missing")
+        elif type(retained) is not dict or set(retained) != {
+                "schema", "source_kind", "state", "provider_attempts", "loop", "reason"}:
+            errors.append("closed_provenance_fields_required")
+        elif (retained["schema"] != "rlab.run-provenance.v1"
+              or retained["source_kind"] != source_kind):
+            errors.append("provenance_schema_or_source_mismatch")
+        else:
+            declared, attempts, loop, reason = (retained[key] for key in (
+                "state", "provider_attempts", "loop", "reason"))
+            if declared not in ("recorded", "unknown", "not_applicable"):
+                errors.append("invalid_provenance_state")
+            elif reason is not None and type(reason) is not str:
+                errors.append("invalid_provenance_reason")
+            elif attempts is not None and (type(attempts) is not list or len(attempts) > 64 or any(
+                    type(attempt) is not dict or not ATTEMPT_FIELDS <= set(attempt) for attempt in attempts)):
+                errors.append("actual_attempt_fields_required")
+            elif loop is not None and type(loop) is not dict:
+                errors.append("loop_receipt_mapping_required")
+            elif declared == "recorded" and (type(attempts) is not list or type(loop) is not dict):
+                errors.append("recorded_attempts_and_loop_required")
+            elif declared == "not_applicable" and (
+                    source_kind != "scripted" or attempts != [] or loop is not None or not reason):
+                errors.append("explicit_scripted_no_provider_declaration_required")
+            elif declared == "unknown" and not reason:
+                errors.append("unknown_provenance_reason_required")
+            else:
+                state = declared
+    if errors and state != "unknown":
+        state = "rejected"
+    elif errors and value is not None:
+        state = "rejected"
+    result = {"state": state, "source_kind": source_kind, "value": retained,
+              "errors": errors, "retained_sha256": digest(retained)}
+    maximum = min(MAX_PROVENANCE_BYTES, max(4096, remaining_bytes))
+    text = canonical(result)
+    if len(text) > maximum:
+        retained = {"rejected": "encoded_byte_limit", "json_prefix": text[:1024],
+                    "partial_representation_sha256": digest(retained)}
+        result = {"state": "rejected", "source_kind": source_kind, "value": retained,
+                  "errors": ["encoded_byte_limit"], "retained_sha256": digest(retained)}
+    return result
+
+
+def verify_matrix_envelope(result: dict, *, expected_envelope_sha256: str,
+                           expected_provenance_sha256: str) -> bool:
+    """Check EXTERNALLY retained anchors, not self-selected hashes in a result.
+
+    This does not recompute evaluator metrics or verify billing/human custody.
+    Use verify_report separately with its own external report/input anchors.
+    Operator must load bounded JSON and independently select both anchors.
+    """
+    if any(type(value) is not str or re.fullmatch(r"[0-9a-f]{64}", value) is None
+           for value in (expected_envelope_sha256, expected_provenance_sha256)):
+        raise ValueError("external envelope/provenance SHA256 anchors required")
+    if type(result) is not dict or result.get("schema") != "rlab.matrix-result.v2":
+        raise ValueError("matrix result v2 required")
+    if (result.get("provenance_sha256") != expected_provenance_sha256
+            or digest(result["provenance"]) != expected_provenance_sha256):
+        raise ValueError("external provenance anchor mismatch")
+    body = {key: value for key, value in result.items() if key != "sha256"}
+    if (result.get("sha256") != expected_envelope_sha256
+            or digest(body) != expected_envelope_sha256):
+        raise ValueError("external result envelope anchor mismatch")
+    return True
 
 
 def validate_inputs(inputs: dict) -> dict:
@@ -132,6 +293,7 @@ def run_matrix(inputs: dict, *, admission: VerifiedAdmission | None,
     """
     inputs = validate_inputs(inputs)
     matrix, records, lifecycle, raw = inputs["matrix"], {}, [], {}
+    provenance, provenance_bytes = {}, 0
     schedule, specs, limits = matrix["schedule"], inputs["specs"], inputs["limits"]
     bound = digest(inputs)
     gate = None
@@ -173,6 +335,7 @@ def run_matrix(inputs: dict, *, admission: VerifiedAdmission | None,
         entry = {"schedule_id": row_id, "status": "not_executed", "reason": gate,
                  "errors": [], "raw_record_retained": False}
         lifecycle.append(entry)
+        provenance[row_id] = {"state": "not_executed", "value": None}
         if gate:
             continue
         if meta["availability"] == "unavailable":
@@ -218,6 +381,8 @@ def run_matrix(inputs: dict, *, admission: VerifiedAdmission | None,
             dispatched += 1
             entry["status"] = "harness_unknown"
             records[row_id] = _unknown(specs[row_id], None, "reset_or_execute_failed")
+            provenance[row_id] = {"state": "unknown", "value": None,
+                                  "errors": ["no_returned_attempt_provenance"]}
             lease = port.reset(_copy(row), _copy(config))
             if (not isinstance(lease, RunLease) or lease.schedule_id != row_id
                     or lease.clock_id != port.clock_id or any(
@@ -235,8 +400,16 @@ def run_matrix(inputs: dict, *, admission: VerifiedAdmission | None,
             sealed = port.execute(lease, _copy(row), _copy(config), deadline)
             if not isinstance(sealed, SealedRun):
                 raise ValueError("sealed run result required")
+            # Capture BEFORE record/identity/media/oracle processing. Rejection
+            # must not destroy actual provider/source-cost/usage evidence.
+            provenance[row_id] = capture_provenance(
+                sealed.provenance, source_kind=scheduled["source_kind"],
+                remaining_bytes=MAX_MATRIX_PROVENANCE_BYTES-provenance_bytes)
+            provenance_bytes += len(canonical(provenance[row_id]))
             raw[row_id] = _copy(sealed.record)
             entry["raw_record_retained"] = True
+            if provenance[row_id]["state"] not in {"recorded", "not_applicable"}:
+                raise ValueError("provider provenance missing/unknown/rejected; retained privately")
             if sealed.schedule_id != row_id or sealed.lease != lease:
                 raise ValueError("sealed row/reset identity mismatch")
             record = _copy(sealed.record)
@@ -295,8 +468,9 @@ def run_matrix(inputs: dict, *, admission: VerifiedAdmission | None,
         # invent report metrics or suppress retained attempted-run records.
         report = None
         report_error = type(error).__name__ + ": " + str(error)
-    body = {"schema": "rlab.matrix-result.v1", "matrix": matrix,
+    body = {"schema": "rlab.matrix-result.v2", "matrix": matrix,
             "input_sha256": bound, "lifecycle": lifecycle, "raw_records": raw,
+            "provenance": provenance, "provenance_sha256": digest(provenance),
             "admission": {"state": admission.state if admission else "PENDING",
                           "reasons": list(admission.reasons) if admission else ["external verifier absent"]},
             "report": report, "report_error": report_error,
