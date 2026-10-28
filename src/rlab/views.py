@@ -35,7 +35,7 @@ def render(task: PublicTask, family: str, items: tuple[str, ...]) -> Page:
                  '<label>Quantity <input name="quantity" value="1" readonly></label>'
                  if family == "F1" else "")
         rows.append(f'<section aria-label="{escape(item, quote=True)}">'
-                    f'<p>{escape(item)}</p><form method="post" action="/action">'
+                    f'<p>{escape(item)}</p><form method="post" action="{task.start_path}/action">'
                     f'<input type="hidden" name="snapshot" value="{epoch}">'
                     f'<input type="hidden" name="ref" value="{ref}">'
                     f'{field}<button id="{ref}">{labels[family]}</button>'
@@ -43,5 +43,5 @@ def render(task: PublicTask, family: str, items: tuple[str, ...]) -> Page:
     markup = ('<!doctype html><html lang="en"><meta charset="utf-8">'
               '<title>Browser Recovery Lab — development task</title><body>'
               f'<h1>{escape(task.goal)}</h1>{"".join(rows)}'
-              '<a href="/history">Transition history</a></body></html>')
+              f'<a href="{task.start_path}/history">Transition history</a></body></html>')
     return Page(epoch, markup, tuple(targets))
