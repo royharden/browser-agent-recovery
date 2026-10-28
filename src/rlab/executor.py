@@ -360,13 +360,17 @@ class Executor:
             self._remember_cleanup_failure(exc)
             return result("harness_unknown", self._cleanup_error)
         except (CapExceeded, TimeoutError) as exc:
+            if self._cleanup_error is not None:
+                # Failed cleanup wins even if final clock accounting raised a
+                # timeout. Do not query that failed clock again or retry cleanup.
+                return result("harness_unknown", self._cleanup_error)
             # Adapter wait/observe methods can raise at their post-call check.
             # Preserve the recovery disposition even when that lower layer did
             # not raise our specialized exception (e.g. OS sleep overshoot).
             try:
                 now = self._now()
-            except InvalidEvidence as invalid:
-                return result("harness_unknown", str(invalid))
+            except Exception as invalid:
+                return result("harness_unknown", "trusted clock unavailable: " + type(invalid).__name__)
             # Genuine run/method overruns take precedence even if an adapter
             # overshoots a shorter recovery deadline by a large amount.
             if now >= self.deadline_ns or (
