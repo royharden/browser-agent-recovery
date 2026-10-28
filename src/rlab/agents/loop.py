@@ -1,5 +1,5 @@
 """Bounded offline actor loop over public ports; no private truth or SDK retry."""
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 import hashlib
 import json
 from typing import Callable, Protocol
@@ -170,6 +170,7 @@ def run_offline(provider: ProviderPort, port: ActionPort, *, model_id: str,
         observation = None
         response = None
         feedback = None
+        attempt_start = len(attempts)
         try:
             if now() >= deadline:
                 return result("deadline")
@@ -228,27 +229,35 @@ def run_offline(provider: ProviderPort, port: ActionPort, *, model_id: str,
             if action.path is not None and action.path not in observation.allowed_paths:
                 raise ValueError("action path outside trusted public allowlist")
             used += 1
-            if action.operation == "finish":
-                attempts.append(LoopStep(request_id, observation.digest, response, None))
-                return result("finished")
             before = now()
             feedback = port.execute(action, request_id=request_id, deadline_ns=deadline)
+            completed = now()
             if (type(feedback) is not ActionFeedback
                     or (feedback.request_id, feedback.run_id, feedback.epoch, feedback.clock_id) != (
                         request_id, observation.run_id, observation.epoch, observation.clock_id)
-                    or not before <= feedback.response_ns <= now()):
+                    or not before <= feedback.response_ns <= completed):
                 raise ValueError("action feedback identity/clock mismatch")
             attempts.append(LoopStep(request_id, observation.digest, response, feedback))
-            if now() >= deadline:
+            if completed >= deadline:
                 return result("deadline")
+            if action.operation == "finish":
+                # finish is a real interaction, not an unbound model assertion.
+                # Unknown/failed completion halts conservatively; never retry
+                # a finish that may already have closed the trusted session.
+                return result("finished" if feedback.status == "acknowledged" else "harness_unknown")
             # An ordinary failed/uncertain receipt is shown to the actor on its
             # next call. Any later action is a new explicit actor decision, not
             # an implicit SDK/controller retry.
             last_feedback = canonical({"status": feedback.status, "message": feedback.public_message})
         except Exception:
-            attempts.append(LoopStep(request_id, observation.digest if type(observation) is PublicObservation else None,
-                                     response if type(response) is ProviderResult else None,
-                                     feedback if type(feedback) is ActionFeedback else None,
-                                     "closed_port_or_request_failure"))
+            if len(attempts) == attempt_start:
+                attempts.append(LoopStep(request_id, observation.digest if type(observation) is PublicObservation else None,
+                                         response if type(response) is ProviderResult else None,
+                                         feedback if type(feedback) is ActionFeedback else None,
+                                         "closed_port_or_request_failure"))
+            else:
+                # Preserve the already-recorded result/feedback on a later
+                # formatting/return failure, without counting dispatch twice.
+                attempts[-1] = replace(attempts[-1], error="closed_port_or_request_failure")
             return result("harness_unknown")
     return result("cap_abort")
