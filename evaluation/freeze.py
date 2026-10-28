@@ -31,13 +31,14 @@ def require_pins(actual: dict, expected: dict) -> None:
 
 
 def implementation_pins() -> dict:
-    """Read only this evaluator and its two standalone entrypoints.
+    """Bind product Python source, this evaluator and both entrypoints.
 
     A hash inventory is provenance, not permission, authorship or acceptance.
     Callers must compare to their external frozen pins before any study use.
     """
     root = Path(__file__).resolve().parent.parent
     paths = sorted((root / "evaluation").glob("*.py"))
+    paths += sorted((root / "src" / "rlab").rglob("*.py"))
     paths += [root / "scripts" / name for name in ("report.py", "verify_report.py")]
     inventory = {path.relative_to(root).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
                  for path in paths}

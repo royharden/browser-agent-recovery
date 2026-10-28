@@ -30,10 +30,13 @@ has integer `bootstrap_seed`, positive `resamples` (default recommendation 10000
 maximum 100000), and `horizon_ns=180000000000`. Price is an external JSON mapping,
 even for a keyless profile; it supplies no spend/access approval. Pins are SHA256
 strings for exactly `source`, `schedule`, `oracle`, `config`, `price`.
-`evaluation.freeze.implementation_pins()` hashes the local evaluator Python file
-inventory plus both scripts, and oracle.py bytes; the other pins are canonical
+`evaluation.freeze.implementation_pins()` hashes the local product `src/rlab/**/*.py`
+and evaluator Python file inventory plus both scripts, and oracle.py bytes; the other pins are canonical
 JSON hashes of their inputs. Freeze and retain actual pins externally before
-execution; the functions do not fabricate research acceptance.
+execution; the functions do not fabricate research acceptance. Product source
+changes after execution require the matching frozen source checkout to rebuild
+the original report. The inventory does not qualify installed dependencies,
+browser/image bytes or external data rights; those remain separate gates.
 
 A schedule row has exactly these nonempty string labels: `schedule_id`, `block_id`,
 `variant`, `family`, `condition`, `arm`, `mode`, `stage`, `model`, `source_kind`.
