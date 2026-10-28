@@ -88,7 +88,12 @@ raw returned records (including failures), matrix metadata, input hash and an
 envelope hash. Evaluator absence remains not_executed; attempted reset/execute with
 unknown evidence becomes harness_unknown. Invalid media is rejected inside the
 per-row handler; raw response remains private and evaluator gets an unknown fallback,
-so a malformed media receipt cannot discard the full matrix report.
+so a malformed media receipt cannot discard the full matrix report. Execution
+termination must be a nonempty string. Any rejected record is replaced by a
+structurally safe unknown receipt, preserving its original JSON in raw_records.
+An unforeseen final evaluator error yields report=null plus report_error and
+unreported_inputs with every scheduled row/record/config/pin for later repair;
+it never fabricates metrics or loses the operator-private failure envelope.
 Current offline known_zero must be an
 explicit producer receipt; absent cost never becomes free. Authored/replay source
 cost stays a separate provenance field and cannot be erased by zero current spend.

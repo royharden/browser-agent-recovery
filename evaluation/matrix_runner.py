@@ -220,6 +220,9 @@ def run_matrix(inputs: dict, *, admission: VerifiedAdmission | None,
             for path in record["media"]:
                 media_path(path)
             execution = record["execution"]
+            if (not isinstance(execution, dict) or not isinstance(execution.get("termination"), str)
+                    or not execution["termination"].strip()):
+                raise ValueError("nonempty string execution termination required")
             if (execution["run_id"] != lease.run_id or execution["epoch"] != lease.epoch
                     or execution["clock_id"] != lease.clock_id):
                 raise ValueError("execution receipt/reset mismatch")
@@ -239,7 +242,8 @@ def run_matrix(inputs: dict, *, admission: VerifiedAdmission | None,
             # Preserve every usable attempted record but invalidate its seal when
             # identity/time/cap cannot be trusted; raw sidecar retains original.
             if row_id in records:
-                records[row_id]["seal"] = None
+                records[row_id] = _unknown(specs[row_id], lease if isinstance(lease, RunLease) else None,
+                                           "invalid_run_record: " + str(error))
         finally:
             if isinstance(lease, RunLease):
                 try:
@@ -251,11 +255,22 @@ def run_matrix(inputs: dict, *, admission: VerifiedAdmission | None,
                     entry.update(status="harness_unknown", reason=gate)
                     entry["errors"].append(type(error).__name__ + ": " + str(error))
                     records[row_id]["seal"] = None
-    report = build_report(schedule, records, pins=inputs["pins"],
-                          config=inputs["config"], price=inputs["price"])
+    report_inputs = {"schedule": schedule, "records": records, "pins": inputs["pins"],
+                     "config": inputs["config"], "price": inputs["price"]}
+    report_error = None
+    try:
+        report = build_report(**report_inputs)
+    except Exception as error:
+        # Preserve an operator-private failure envelope even if an unforeseen
+        # evaluator/aggregation defect prevents rendering the report. Never
+        # invent report metrics or suppress retained attempted-run records.
+        report = None
+        report_error = type(error).__name__ + ": " + str(error)
     body = {"schema": "rlab.matrix-result.v1", "matrix": matrix,
             "input_sha256": bound, "lifecycle": lifecycle, "raw_records": raw,
             "admission": {"state": admission.state if admission else "PENDING",
                           "reasons": list(admission.reasons) if admission else ["external verifier absent"]},
-            "report": report, "runtime_qualification": "unverified"}
+            "report": report, "report_error": report_error,
+            "unreported_inputs": report_inputs if report_error else None,
+            "runtime_qualification": "unverified"}
     return {**body, "sha256": digest(body)}
