@@ -8,6 +8,7 @@ import json
 import time
 from urllib.parse import parse_qs, urlsplit
 from uuid import uuid4
+from typing import Callable
 
 from .contracts import HistoryRead, Intent, Origin
 from .driver import DevelopmentTask
@@ -146,7 +147,8 @@ class TaskHost:
     This source does not establish those process/security properties.
     """
 
-    def __init__(self, port: LocalTaskPort, allowed_origin: str):
+    def __init__(self, port: LocalTaskPort, allowed_origin: str, *,
+                 receipt_sink: Callable[[ActionReceipt], None] | None = None):
         parsed = urlsplit(allowed_origin)
         if (parsed.scheme != "http"
                 or parsed.hostname not in {"127.0.0.1", "localhost"}
@@ -162,6 +164,9 @@ class TaskHost:
         self.origin = allowed_origin
         self.host = parsed.netloc
         self.base = base
+        # Trusted constructor injection only. Never sourced from WSGI headers,
+        # forms or environ. Retain terminal results before response delivery.
+        self._receipt_sink = receipt_sink
 
     def __call__(self, environ, start_response):
         def response(code, body, content_type="application/json; charset=utf-8"):
@@ -228,6 +233,8 @@ class TaskHost:
                 raise ValueError("form does not match admitted original action")
             receipt = self.port.execute(context.intent, context.request_id,
                                         context.origin, deadline_ns)
+            if self._receipt_sink is not None:
+                self._receipt_sink(receipt)
             code = "200 OK" if receipt.status == "acknowledged" else "409 Conflict"
             return response(code, json.dumps(asdict(receipt)))
         except PreparedCancellationError:
