@@ -10,7 +10,9 @@ import ast
 import hashlib
 from pathlib import Path
 
-SCHEMA_VERSION = "1.0.0"
+# v2 adds Page.controls to the complete serialized record after accepted source
+# composition. No v1/v2 artifacts have been generated during construction.
+SCHEMA_VERSION = "2.0.0"
 # Explicit public record allowlist. In particular, authority is never parsed.
 RECORDS = {
     "contracts": ("PublicTask", "Target", "Intent", "Transition", "HistoryRead", "FailedAction"),

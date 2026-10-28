@@ -1,14 +1,14 @@
 # Public and trusted interfaces
 
 Dirty Mode source construction; runtime unverified. API inventory baseline:
-82d099767b3603692dc5bd11a1327cba546b81ef. Canonical definitions and validators
+7ef166751b1a64f36dfddedd7287938373128643. Canonical definitions and validators
 own detailed behavior; this map is not instrument or independent acceptance.
 
 | Layer | Canonical source | Boundary |
 | --- | --- | --- |
 | Public task/recovery evidence | rlab.contracts | PublicTask, Target, Intent, Transition, HistoryRead, FailedAction; no expected effects |
 | Closed actions | rlab.actions | Action, Mutation, parse_action, validate_action; kind-dependent wire fields |
-| Public observation | rlab.snapshot, rlab.views | Snapshot/validate_snapshot; Page is the development public HTML/target projection |
+| Public observation | rlab.snapshot, rlab.views | Snapshot/validate_snapshot; Page separates mutation targets from controls such as the Body textbox |
 | Recovery | rlab.recovery | verify, resolve, Reconciliation; visible evidence only |
 | Bound receipts | rlab.ports | ActionReceipt, InteractionReceipt; trusted identity/timing supplied by adapter |
 | Offline model seam | rlab.providers, rlab.agents | Authored mock/replay, request/result records, bounded loop and explicit action mapping |
@@ -33,16 +33,36 @@ reports that gap instead of exposing authority dictionaries as public schemas.
 Private TaskSpec/expected effects, schedules, hidden answers and seeds never
 belong in actor definitions. Static dependency checks do not prove isolation.
 
-Current D1 trusted backend/loop bridge, D2 broker/original prompts and D3 development
-matrix runner are IN PROGRESS, outside this pinned inventory. Their final source
-composition needs reconciliation; no implementation/acceptance is claimed here.
+The accepted composition now contains D1's explicit development session/backend,
+TrustedActionPortAdapter and D2 SessionLoopCodec join, D2's offline broker/codec
+and original prompt profiles, and D3's matrix lifecycle/provenance facade.
+DevelopmentMatrixPort supplies preflight/reset/execute/close to that fixed facade;
+JoinedDevelopmentOrchestration delegates through trusted embedding. Execution
+requires genuine external admission, prompt clearance and operator factories.
+These are source joins, not observed execution or canonical browser isolation.
+
+Current static guidance reports a dependency-policy violation: agents.__init__
+eagerly loads agents.session_codec, which imports trusted executor/ports modules.
+Package initialization makes this closure reachable from public agent modules
+and the worker. This owner reconciliation item has not been exempted; no runtime
+isolation breach is established by the scan. See [checker status](CONTRACTS.md).
+
+Canonical activation has MISSING implementation: SourceProfile.require_activation,
+OwnedWorker.start and worker.main refuse; privileged launch, isolated browser IPC
+and complete worker control wiring have not been joined. The explicit
+in_process_convenience adapter does not implement these canonical paths.
+JoinedDevelopmentOrchestration.freeze refuses instead of producing a source
+schedule artifact. Final source pins await final accepted bytes and line endings;
+no schema generation, actual freeze or independent receipt was performed.
 Follow the owning documents for details:
 
 - [Host/recovery](HOST-RECOVERY.md): executor, browser and authority seams.
+- [Trusted boundary](TRUSTED-BOUNDARY.md): refused entrypoints and offline pipe source.
 - [CLI](CLI.md): missing ports, command dispatch and trusted report loading.
 - [Admission](ADMISSION.md): external anchors and independent gates.
 - [Offline provider](OFFLINE-PROVIDER.md): request/cost binding and public action loop.
 - [Evaluation](EVALUATION.md): operator reports and integrity anchors.
+- [Matrix](MATRIX.md): development scheduling, lifecycle and provenance sidecars.
 - [Limitations](LIMITATIONS.md): deferred qualification.
 
 Independent authorship, custody, rights, all twenty admission cells, installed

@@ -40,10 +40,15 @@ TRUSTED_ROOTS = {
     "rlab.admission": "operator admission interface",
     "rlab.admission.schemas": "operator admission schema",
     "rlab.admission.validator": "operator admission validator",
+    "rlab.admin_socket": "operator-only private reset/seal socket",
+    "rlab.dev_backend": "trusted development execution and orchestration embedding",
+    "rlab.supervisor": "operator-only canonical launch profile and owned lifecycle",
+    "rlab.trusted_bridge": "trusted development/session bridge and action-port adapter",
 }
 FORBIDDEN_MODULES = frozenset({
     "rlab.cli", "rlab.authority", "rlab.driver", "rlab.host", "rlab.executor",
     "rlab.browser", "rlab.ports", "rlab.faults", "rlab.lag", "rlab.admission",
+    "rlab.admin_socket", "rlab.dev_backend", "rlab.supervisor", "rlab.trusted_bridge",
 })
 FORBIDDEN_PARTS = frozenset({
     "authority", "evaluation", "heldout", "held_out", "admin", "admin_socket",

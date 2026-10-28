@@ -1,6 +1,6 @@
 # Generated public schemas (later activation)
 
-No JSON artifacts have been generated here. Version 1.0.0 export SOURCE is
+No JSON artifacts have been generated here. Version 2.0.0 export SOURCE is
 src/rlab/public_schema.py, with scripts/export_contracts.py as the operator entry
 point. See [derivation and limitations](../docs/CONTRACTS.md).
 
@@ -14,6 +14,12 @@ a measured result, worker isolation or instrument acceptance.
 
 Packaging discovery explicitly excludes evaluation/heldout/held_out packages
 under rlab and their descendants, with implicit package-data inclusion disabled.
-The source-only boundary checker reports a clear declared scope at this revision;
-no wheel was built or installed, and schema JSON has not been generated. Future
+The earlier packaging-only scan was clear; combined-source reconciliation now
+reports an agents/session_codec-to-trusted-executor/ports policy violation. No
+actor closure is exempted to hide it. No wheel was built or installed, and schema
+JSON has not been generated. Future
 distribution of generated resources needs an explicit packaging decision.
+
+Version 2 derives the newly required Page.controls field from accepted canonical
+source. Final source/generator hashes are produced only on later export against
+the final reviewed checkout; no research freeze or independent receipt exists.
