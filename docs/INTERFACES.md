@@ -1,45 +1,50 @@
-# Foundation interfaces (v1)
+# Public and trusted interfaces
 
-Original source authored by 0B14_Codex_gpt-61-sol_N20M1620DL3_M16-20-DL3,
-2026-10-27. Synthetic widget/category strings are original development material.
-No external tasks, upstream code, paper prompts, sealed answers or real people
-are copied. Licensing and data admission remain pending; no licence is asserted.
+Dirty Mode source construction; runtime unverified. API inventory baseline:
+82d099767b3603692dc5bd11a1327cba546b81ef. Canonical definitions and validators
+own detailed behavior; this map is not instrument or independent acceptance.
 
-`PublicTask` supplies goal/start path and public run/epoch. `Intent` captures the
-original action's operation, target semantics, immutable fields and last public
-version. It contains no expected outcome. Payload tuples must use sorted unique
-field names. Each root intent keeps one `Reconciliation` for its entire lifetime.
+| Layer | Canonical source | Boundary |
+| --- | --- | --- |
+| Public task/recovery evidence | rlab.contracts | PublicTask, Target, Intent, Transition, HistoryRead, FailedAction; no expected effects |
+| Closed actions | rlab.actions | Action, Mutation, parse_action, validate_action; kind-dependent wire fields |
+| Public observation | rlab.snapshot, rlab.views | Snapshot/validate_snapshot; Page is the development public HTML/target projection |
+| Recovery | rlab.recovery | verify, resolve, Reconciliation; visible evidence only |
+| Bound receipts | rlab.ports | ActionReceipt, InteractionReceipt; trusted identity/timing supplied by adapter |
+| Offline model seam | rlab.providers, rlab.agents | Authored mock/replay, request/result records, bounded loop and explicit action mapping |
+| Operator commands | rlab.cli | Injected trusted ports and fixed optional evaluation loader; never an actor dependency |
 
-`Authority` is trusted-only. It creates run/epoch/clock IDs, atomically records
-attempts and actual effects, exposes ordinary history separately from `seal`,
-and refuses mutation/read after seal or process-clock change. Reopening a DB
-requires fresh runs, not cross-clock timing arithmetic. Each effect has sequence,
-version, epoch, clock and request ID. Attempt root/origin comes from the trusted
-executor, never a model-provided lineage label. Sealed state includes surviving
-items and transition history for created orders/tickets. No scorer is supplied.
+The complete serialized driver Action dataclass differs from the dictionary
+accepted by parse_action. Provider Action.operation differs from driver
+Action.kind: use rlab.agents.map_action. Annotation schemas replace neither
+closed validator. See [contract projection](CONTRACTS.md).
 
-`DevelopmentTask` composes authority and original HTML for F1 order, F2 ticket,
-F3 delete. `observe` refreshes refs. `action` maps the *current* ref to its actual
-row and preserves original form fields, so the shared adapter does not silently
-protect R0/R1 from wrong-row effects. It currently rejects old snapshot epochs;
-silent ref remapping and scheduled faults require future driver/authority wiring.
-There is no HTTP listener or worker process in this milestone.
+R0/R1 retain captured references without a common semantic refresh guard. R3/R23
+explicitly re-resolve fresh role/name/row context. R2 permits absence only from a
+fresh successful complete unfiltered same-clock read with matching watermarks
+and contiguous versions. Timeout is never absence. Retry lifecycle, deadlines,
+cancellation and uncertain completion belong to [host/recovery](HOST-RECOVERY.md).
 
-R2 `verify` consumes ordinary complete transition history only. It rejects lag,
-cache, partial/filtered reads, aliases, repeated request IDs, clock/run/epoch
-mismatch, pre-response reads and non-contiguous versions. Exactly one matching
-post-v0 transition is present; none is absent; multiple matches are ambiguous.
-`Reconciliation.inspect` counts every probe, admits at most one retry before a
-fixed 4-second default deadline and abstains when its step/time cap expires.
-Driver must count probe/action costs and obtain fresh targets with `resolve`
-before an R23 retry. While the retry is outstanding, inspection refuses to use
-history. If that retry fails, call `retry_failed` with the trusted response timing:
-freshness moves past that response but the original total deadline stays fixed.
-R3 uses unique role/name/row identity; it refuses ambiguity.
+Authority, DevelopmentTask and host/operator adapters are trusted. They own
+DB/admin/fault/seal controls. Sealed bundles contain operator/scorer state,
+attempt/effect events and visibility/fault metadata, not actor observations.
+No canonical typed PUBLIC event envelope exists at this baseline. Export source
+reports that gap instead of exposing authority dictionaries as public schemas.
+Private TaskSpec/expected effects, schedules, hidden answers and seeds never
+belong in actor definitions. Static dependency checks do not prove isolation.
 
-Later transport wiring owns allowlisted local navigation, trusted timestamp and
-lineage capture, history request IDs, current snapshot installation, action caps
-and policy lifecycle. No arbitrary JS/HTTP/model tool belongs in actor contracts.
-Never provide `Authority`, database handles, `seal` or lag controls to the worker.
-R0/R1/R2/R3/R23 orchestration, fault/lag scheduling, server HTTP adapter, supervisor,
-private oracle, custodian admission, provider and evaluation stay deferred.
+Current D1 trusted backend/loop bridge, D2 broker/original prompts and D3 development
+matrix runner are IN PROGRESS, outside this pinned inventory. Their final source
+composition needs reconciliation; no implementation/acceptance is claimed here.
+Follow the owning documents for details:
+
+- [Host/recovery](HOST-RECOVERY.md): executor, browser and authority seams.
+- [CLI](CLI.md): missing ports, command dispatch and trusted report loading.
+- [Admission](ADMISSION.md): external anchors and independent gates.
+- [Offline provider](OFFLINE-PROVIDER.md): request/cost binding and public action loop.
+- [Evaluation](EVALUATION.md): operator reports and integrity anchors.
+- [Limitations](LIMITATIONS.md): deferred qualification.
+
+Independent authorship, custody, rights, all twenty admission cells, installed
+wheel exclusion and P11 instrument qualification remain pending. Construction
+does not retroactively satisfy the frozen plan's preimplementation order.
