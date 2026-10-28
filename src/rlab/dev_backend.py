@@ -442,7 +442,14 @@ class DevelopmentMatrixPort:
                 error = error or "incomplete_scripted_receipt"
         if source != "scripted" and (outcome is None or outcome.termination in {"not_executed", "harness_unknown"}):
             error = error or "attempted_loop_unknown"
-        if error or seal is None or self.now_ns() > deadline:
+        # A failed final clock must not discard already captured provider/loop
+        # receipts. Retain the partial sidecar and stop subsequent dispatch.
+        try:
+            if self.now_ns() >= deadline:
+                error = error or "final_deadline_exhausted"
+        except Exception as exc:
+            error = error or "final_clock_unavailable:" + type(exc).__name__
+        if error or seal is None:
             termination, seal, self._halted = "harness_unknown", None, True
         record = {"seal": seal, "spec": None,
                   "execution": {"run_id": lease.run_id, "epoch": lease.epoch, "clock_id": lease.clock_id,
