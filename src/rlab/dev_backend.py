@@ -28,8 +28,13 @@ class JoinedDevelopmentOrchestration:
     No default inputs, admission, private specs or schedule are manufactured.
     The caller retains returned artifacts exclusively within its private boundary.
     """
-    def __init__(self, *, inputs: dict, admission: Any, port: Any):
+    def __init__(self, *, inputs: dict, admission: Any, port: Any,
+                 expected_input_sha256: str | None = None,
+                 expected_source_hashes: dict | None = None):
         self._inputs, self._admission, self._port = _detached(inputs), admission, port
+        self._expected_input_sha256 = expected_input_sha256
+        self._expected_source_hashes = (None if expected_source_hashes is None
+                                        else _detached(expected_source_hashes))
 
     def matrix(self, request: FixtureRequest) -> PortResult:
         if request.profile != "in_process_convenience":
@@ -42,7 +47,25 @@ class JoinedDevelopmentOrchestration:
         return PortResult("complete", "Private D3 lifecycle envelope; runtime unverified", artifact)
 
     def freeze(self, request: FixtureRequest) -> PortResult:
-        return PortResult("unavailable", "No independently admitted source-freeze producer installed")
+        if request.mode != "fixture":
+            return PortResult("unavailable", "Source schedule supports development fixtures only")
+        try:
+            from evaluation.source_schedule import build_source_schedule
+        except ImportError:
+            return PortResult("unavailable", "Accepted fixed source-schedule facade unavailable")
+        # These anchors and typed admission are operator inputs. Never derive
+        # them from the supplied document or manufacture a JSON PASS receipt.
+        result = build_source_schedule(
+            self._inputs, admission=self._admission,
+            expected_input_sha256=self._expected_input_sha256,
+            expected_hashes=self._expected_source_hashes)
+        if result.state == "pending":
+            return PortResult("pending", "External source-schedule admission or anchors missing")
+        if result.state == "refused":
+            return PortResult("failed", "External source-schedule bindings refused")
+        if result.state != "ready" or type(result.artifact) is not dict:
+            raise ValueError("invalid accepted source-schedule decision")
+        return PortResult("complete", "Private source schedule only; runtime unverified", result.artifact)
 
 
 def _matrix_types() -> Any:

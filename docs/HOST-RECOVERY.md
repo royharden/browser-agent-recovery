@@ -226,3 +226,32 @@ uncertain cleanup halts further dispatch. The external evaluator specification
 never enters the public actor facade. D3 owns scheduling and sidecar validation.
 Missing external admission, prompt clearance or accepted source dependencies
 must remain unattempted. These are source contracts, with no runtime evidence.
+
+## Fixed browser receipt adapter (r6 source)
+
+`FramedBrowserChannel` consumes an operator-preinstalled authenticated byte
+capability using one fixed bounded JSON protocol. `BrowserAuthorityIPC` validates
+run/epoch/clock/request/root correlation and authority timing, including ordinary
+lagged history and actual terminal mutation receipts. It accepts no actor endpoint,
+descriptor number, plugin or callback selector. The external capability must cap
+allocation before returning a frame, enforce real deadlines, authenticate its peer
+and associate the browser context with the server's next bound POST. These are
+required activation hooks, not qualified by a protocol declaration.
+
+`PlaywrightBridge(ipc)` supplies lazy concrete browser commands/public DOM
+projection. Construction starts nothing. Fresh contexts disable page scripts and
+service workers, install exact RoutePolicy on every resource, reject extra
+pages/WebSockets/downloads, and fetch admitted routes without following redirects.
+Redirect/attachment responses are rejected before fulfilment. Only one trusted
+bound ordinary form POST is permitted; no actor JS, arbitrary HTTP or shell exists.
+The fixed internal DOM extractor includes public Body controls/current literal
+form values. Prepare installs public remap markup, compares projected epoch/targets,
+then requests a trusted installed acknowledgment. Click binds IntentContext through
+IPC and obtains terminal completion there even after a browser error. Page headers,
+form fields and client clocks cannot create authoritative lineage or timestamps.
+
+The browser IPC peer/server, privileged activation and actual browser qualification
+remain unjoined. Commands without native timeout support require external hard
+preemption. Dependency/API compatibility, redirects, all-resource enforcement,
+fresh-context behavior and remap acknowledgment have not been exercised. Context
+receipts describe source intent, not isolation PASS.

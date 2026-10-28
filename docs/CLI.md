@@ -190,3 +190,22 @@ Deferred: reconcile fixture/admission/provider producers and evaluator schemas;
 validate caps and host clock/lineage; establish private artifact ACLs; exercise
 missing-backend failures, default fixture, live refusal, output no-overwrite,
 trusted-anchor verification and private artifact handling after Dirty Mode ends.
+
+## Source-schedule operation (r6 source)
+
+`freeze` delegates to fixed `evaluation.source_schedule.build_source_schedule`.
+It requires `--source-inputs` (full original development matrix inputs),
+`--source-expected-input-sha256` (independently selected digest text file), and
+`--source-expected-hashes` (independently selected hash mapping). Exact hash keys
+are matrix, schedule, metadata, specs, config, limits, price, pins, source, oracle,
+entrypoint, admission. Input files cannot double as their anchor files. No digest,
+source pin or approval is manufactured. No task or browser is run by this operation.
+
+The trusted embedding supplies `OperatorPorts.source_schedule_admission`, an
+actual externally verified full-input-bound admission object. A CLI JSON PASS
+cannot construct it. Ordinary manifest admission and this full-input binding are
+separate gates; absent full-input approval remains pending even after manifest
+PASS. The facade returns ready/pending/refused; only ready produces an exclusive
+private output using existing rules. Missing facade remains unavailable.
+The artifact is a source schedule and reproducibility binding, not research
+freeze, independent rights/data admission, signature or instrument acceptance.
