@@ -38,6 +38,8 @@ class PrivateAdmin:
         self._task: DevelopmentTask | None = None
         self._listener: socket.socket | None = None
         self._requests = 0
+        self._sealed_receipt: dict[str, object] | None = None
+        self._export_attempt = 0
 
     def bind_development(self) -> None:
         self.profile.validate()
@@ -76,7 +78,7 @@ class PrivateAdmin:
             if type(seed) is not int or not 0 <= seed <= 999:
                 raise ValueError("bounded development seed required")
             self._require_worker_stopped()
-            if self._task is not None:
+            if self._task is not None or self._sealed_receipt is not None:
                 raise ValueError("seal current run before reset")
             self._task = DevelopmentTask(self.authority, family, seed)
             return {"status": "development-unqualified", "public": asdict(self._task.public)}
@@ -84,11 +86,17 @@ class PrivateAdmin:
             self._require_worker_stopped()
             if self._task is None:
                 raise ValueError("no active development run")
-            receipt = self.authority.seal(self._task.public)
+            if self._sealed_receipt is None:
+                self._sealed_receipt = self.authority.seal(self._task.public)
+                self._export_attempt = 0
+            # Repeated seal requests retry export of the SAME sealed evidence;
+            # they never call Authority.seal a second time or start another run.
+            receipt = self._sealed_receipt
+            self._export_attempt += 1
+            suffix = "" if self._export_attempt == 1 else f"-export-{self._export_attempt}"
             # Authority-generated run ID only; output root never comes from request.
             path = contained_file(self.profile.output_root,
-                                  self._task.public.run_id + ".json")
-            self._task = None  # sealed even if serialization/write subsequently fails
+                                  self._task.public.run_id + suffix + ".json")
             encoded = canonical(receipt).encode("utf-8")
             if len(encoded) > MAX_RECEIPT_BYTES:
                 raise ValueError("seal receipt exceeds output cap; no export claimed")
@@ -99,6 +107,11 @@ class PrivateAdmin:
                 stream.write(encoded)
                 stream.flush()
                 os.fsync(stream.fileno())
+            # Clear active/pending state only after complete durable export.
+            # Failed/partial files remain untouched; retries use a new basename.
+            self._task = None
+            self._sealed_receipt = None
+            self._export_attempt = 0
             return {"status": "sealed-development-unqualified", "receipt": str(path),
                     "sha256": receipt["sha256"], "scorer_access": "read-only file; same authority UID",
                     "runtime_qualification": "UNVERIFIED"}

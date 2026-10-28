@@ -55,6 +55,11 @@ is unjoined. The digest is Authority's existing bundle digest, not an isolation 
 scorer acceptance claim. If serialization/export fails after sealing, no output
 success is claimed and the operator must reconcile the sealed run; no retry reset
 can silently manufacture replacement evidence. Partial outputs are preserved.
+The adapter retains its sealed receipt and active run on every export failure;
+reset stays refused. A repeated seal request retries that same frozen receipt
+without resealing Authority, using an exclusive `-export-N` basename so partial
+files are never overwritten/deleted. State clears only after successful fsync.
+Process-restart recovery of that in-memory pending export remains unjoined.
 
 Before canonical activation: implement privileged authority/worker launch, exact
 descriptor closure and UID/group drops, fresh per-run browser context/namespace,

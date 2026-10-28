@@ -224,7 +224,8 @@ class TrustedActionPortAdapter:
             elif isinstance(result, ExecutionResult):
                 if result.request_id != request_id:
                     raise ValueError("feedback correlation mismatch")
-                if result.receipts:
+                if (result.receipts and not result.uncertain_request_ids
+                        and not result.pending_cleanup_request_ids):
                     response_ns = result.receipts[-1].response_ns
                 if result.disposition in {"harness_unknown", "cap_abort"}:
                     self._halted = True

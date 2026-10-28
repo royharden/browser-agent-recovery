@@ -208,3 +208,6 @@ actual receipt timing into feedback and uses None for missing response time.
 The final D2 codec/shape binding is unjoined until producer acceptance; no
 provider/agent module is imported by this adapter. Canonical worker/authority
 IPC, resource route enforcement and real browser acknowledgment remain pending.
+Aggregate loop feedback leaves response_ns unset when a final retry is uncertain
+or cleanup is unresolved; an earlier terminal receipt remains in the result but
+cannot stand in for the final issued request's missing completion.
