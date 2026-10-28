@@ -116,6 +116,11 @@ class Executor:
         self._last_ns = now
         return now
 
+    def _remember_cleanup_failure(self, failure: PreparedCancellationError) -> None:
+        """Latch before fallible clock/trace accounting can mask the exception."""
+        self._prepared_request = failure.request_id
+        self._cleanup_error = "prepared cancellation failed: trusted reconciliation required"
+
     def _begin(self, end_ns: int | None = None) -> tuple[int, int]:
         if self._cleanup_error is not None:
             raise InvalidEvidence(self._cleanup_error)
@@ -219,9 +224,10 @@ class Executor:
         try:
             try:
                 receipt = self.port.execute(intent, request_id, origin, deadline)
-            except PreparedCancellationError:
+            except PreparedCancellationError as exc:
                 # Do not erase pending state or reinterpret failed cleanup as a
                 # lost mutation confirmation eligible for history/retry.
+                self._remember_cleanup_failure(exc)
                 raise
             except Exception as exc:
                 if self._prepared_request == request_id:
@@ -259,6 +265,9 @@ class Executor:
             if self._now() >= deadline:
                 raise CapExceeded("preparation exceeded deadline")
             outcome = "prepared"
+        except PreparedCancellationError as exc:
+            self._remember_cleanup_failure(exc)
+            raise
         finally:
             self.steps.append(Step("prepare", request_id, "controller_resolve",
                                    started, self._now(), outcome))
@@ -348,8 +357,7 @@ class Executor:
                 else:
                     self._wait(self.poll_wait_ns, recovery_end)
         except PreparedCancellationError as exc:
-            self._prepared_request = exc.request_id
-            self._cleanup_error = "prepared cancellation failed: trusted reconciliation required"
+            self._remember_cleanup_failure(exc)
             return result("harness_unknown", self._cleanup_error)
         except (CapExceeded, TimeoutError) as exc:
             # Adapter wait/observe methods can raise at their post-call check.
