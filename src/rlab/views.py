@@ -11,6 +11,7 @@ class Page:
     snapshot_epoch: str
     html: str
     targets: tuple[Target, ...]
+    controls: tuple[Target, ...] = ()
 
 
 def render(task: PublicTask, family: str, items: tuple[str, ...]) -> Page:
@@ -23,6 +24,7 @@ def render(task: PublicTask, family: str, items: tuple[str, ...]) -> Page:
         raise ValueError("development family only")
     epoch = uuid4().hex
     targets = []
+    controls = []
     rows = []
     labels = {"F1": "Order", "F2": "Create ticket", "F3": "Delete"}
     choices = ("general", "billing") if family == "F2" else items
@@ -30,12 +32,15 @@ def render(task: PublicTask, family: str, items: tuple[str, ...]) -> Page:
         ref = f"{epoch}-{index}"
         target = Target(ref, epoch, "button", labels[family], item)
         targets.append(target)
-        field = ('<label>Body <textarea name="body" required></textarea></label>'
+        control_ref = f"{epoch}-body-{index}"
+        if family == "F2":
+            controls.append(Target(control_ref, epoch, "textbox", "Body", item))
+        field = (f'<label>Body <textarea id="{control_ref}" name="body" required></textarea></label>'
                  if family == "F2" else
                  '<label>Quantity <input name="quantity" value="1" readonly></label>'
                  if family == "F1" else "")
         rows.append(f'<section aria-label="{escape(item, quote=True)}">'
-                    f'<p>{escape(item)}</p><form method="post" action="/action">'
+                    f'<p>{escape(item)}</p><form method="post" action="{task.start_path}/action">'
                     f'<input type="hidden" name="snapshot" value="{epoch}">'
                     f'<input type="hidden" name="ref" value="{ref}">'
                     f'{field}<button id="{ref}">{labels[family]}</button>'
@@ -43,5 +48,7 @@ def render(task: PublicTask, family: str, items: tuple[str, ...]) -> Page:
     markup = ('<!doctype html><html lang="en"><meta charset="utf-8">'
               '<title>Browser Recovery Lab — development task</title><body>'
               f'<h1>{escape(task.goal)}</h1>{"".join(rows)}'
-              '<a href="/history">Transition history</a></body></html>')
-    return Page(epoch, markup, tuple(targets))
+              f'<a href="{task.start_path}/history">Transition history</a></body></html>')
+    # Keep mutation refs separate: DevelopmentTask/remap_page operate only on
+    # button targets. Public input controls never become submission targets.
+    return Page(epoch, markup, tuple(targets), tuple(controls))

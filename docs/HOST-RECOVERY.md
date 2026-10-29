@@ -1,0 +1,348 @@
+# Host and recovery source integration
+
+This package is construction source only. Runtime, browser transport, isolation,
+mutation/fault behavior and the study instrument have not been qualified. No
+model rows are measured. Independent data admission, custody, challenge tables,
+licensing and study acceptance remain PENDING - needs Roy.
+
+## Host and trusted adapter
+
+`TaskHost` is a provisional stdlib WSGI callable, with no listener or startup
+entrypoint. The frozen plan calls for Starlette; transport replacement and real
+browser/HTTP integration remain deferred. It serves only the configured task
+page, ordinary transition history and the task's form submission route under an
+exact loopback HTTP origin with an explicit port. There is no reset, seal,
+private-state or administrative route.
+
+A POST requires a server-injected `rlab.intent_context` holding the original
+admitted intent, trusted request ID/origin and absolute deadline. Incoming HTTP
+headers and form fields never create that context. An unbound POST returns 503.
+The form must contain exactly the admitted original payload, reference and
+snapshot; duplicates and extra fields are rejected. Bodies are limited to 8192
+bytes/eight fields, same-origin POSTs are required, and each request is bounded
+by the earlier of its trusted deadline and a three-second method allowance.
+
+A later trusted bridge must bind context to the current executor/task and each
+request, prevent actor access to WSGI environ, enforce request/body read timeouts,
+restrict its listener to the approved loopback address, and apply process/ACL and
+egress controls. Checking the deadline after a body read cannot interrupt a
+blocking WSGI read. These are integration assumptions, not proven protections.
+
+`LocalTaskPort` is trusted in-process development wiring. Its authority object
+and task object must never be given to a worker. It delegates observations and
+mutations to `DevelopmentTask`; history must use `DevelopmentTask.history(id)`
+so task-owned lag/fault behavior is retained. There is no direct-authority-history
+fallback. DL2's accepted producer baseline `5ace58b` supplies this task history
+method and has been merged for static consumer reconciliation. The confirmed
+r3 seam also supplies `Authority.now_ns()`, and `LocalTaskPort.now_ns()` delegates
+to it so method deadlines and response timing share the authority clock domain.
+Clock identity and monotonic-clock assumptions still require runtime qualification.
+
+For guarded R3/R23 actions, the executor calls
+`prepare_action(request_id, deadline_ns)` before fresh observe/resolve, then uses
+the same request ID for execute. This delegates to
+`DevelopmentTask.prepare_action(request_id)` with deadline checks before and
+after. Task action performs fallback preparation once when omitted by R0/R1/R2;
+there is no common semantic guard or double preparation. A successful
+`changed=false` dictionary is acknowledged as a legitimate no-op, not treated
+as an automatic retry trigger.
+
+If fresh resolution refuses, or the executor exits before issuing a prepared
+mutation, `cancel_action(request_id)` releases the pending submission. It is
+trusted non-effect cleanup, exempt from browser-operation admission so it can
+run after an expired deadline or an exhausted cap. Result metadata records
+cancelled request IDs. Cleanup failure is harness-unknown. An issued action
+consumes its preparation, even when confirmation is lost; it is never cancelled
+as a substitute for history reconciliation. A local preparation that overruns
+its deadline cancels before propagating the timeout.
+
+Cleanup failure has a distinct `PreparedCancellationError` port contract. The
+local adapter retains its pending marker and propagates that error, including
+when cancellation follows a pre-dispatch deadline or preparation overrun.
+The executor preserves `pending_cleanup_request_ids`, returns `harness_unknown`
+without history reconciliation or mutation retry, and refuses further port
+operations until a trusted owner reconciles the pending state. It does not
+automatically retry failed cleanup. This metadata is separate from confirmed
+`cancelled_request_ids`; failed cleanup never counts as successful cancellation.
+The WSGI surface returns a service-unavailable error for this condition. These
+are source guarantees requiring later runtime qualification.
+
+The producer installs deterministic STALE_ID remaps before guarded observation
+and reuses preparation for the same request ID; current source has no asynchronous
+onset after resolution. Its default acknowledgement is local page installation,
+not a real browser acknowledgement. A future transport must supply the trusted
+`acknowledge_remap(Page)` callback and qualify the asynchronous boundary race.
+Failed acknowledgement remains a producer harness-error marker, not a fired
+successful browser event.
+
+The confirmed task seam reserves `ValueError` for pre-effect expired-view or
+missing-reference rejection, which yields a `failed` receipt. Other exceptions
+after dispatch yield `unknown` because a mutation may have committed before
+confirmation was lost; in particular, interrupted-action `TimeoutError` occurs
+after commit. A returned action
+status can be `acknowledged`, `failed`, `unchanged` or `unknown`; unrecognized
+status and deadline overrun remain unknown. An unknown receipt never proves
+absence; `failed` relies on the confirmed pre-effect exception contract, not
+independent effect evidence. Request identity and authority-clock receipt timing belong to
+the trusted bridge, never actor-provided headers or client timestamps.
+
+## Recovery executor contract
+
+The executor retains immutable original operation, target semantics, payload,
+root-intent identity and pre-action public version. Re-resolution changes only
+the issued reference/snapshot. Form fields come from the original intent, never
+from private answers or a refreshed default form.
+
+- R0 returns native action results without an automatic wrapper retry.
+- R1 repeats the same failed/unknown/unchanged action once after 250ms. It retains
+  the captured reference; common validation does not add semantic identity checks.
+- R2 reconciles against ordinary public transition history and retries once only
+  after a fresh complete unfiltered read proves absence. Lag, cache, repeated or
+  partial reads, aliases, multiple matches and uncertain timing are ambiguous.
+- R3 uniquely resolves fresh role/name/row-context identity before mutation,
+  refusing missing or ambiguous matches. It adds no R2 retry.
+- R23 combines the semantic guard and reconciliation, including a fresh unique
+  resolution before its single retry. Original payload and target semantics stay
+  unchanged throughout.
+
+The same executor accounting applies across arms: at most 40 total port
+operations (including observations, history probes, waits and retries), a fixed
+180-second run deadline, and at most three seconds per method. The reconciliation
+window defaults to four seconds from the failed response and never resets after
+a retry. All additional probes/actions/waits consume steps and elapsed time.
+Recovery-window exhaustion yields ambiguous abstention; genuine method or run
+cap overruns take precedence and remain cap aborts. A history timeout before its
+method deadline is unsuccessful/incomplete evidence, never an empty-success read.
+No elapsed timeout alone proves absence. The 40-operation interpretation is
+stricter than a mutation-only action count and must be checked for profile fit
+later; it is not evidence that a future live-model request profile fits.
+
+This source seam covers mutation forms and public observations/history. The full
+closed browser bridge for navigation, click/fill/select/back/reload/finish,
+allowlisted URL/method handling, snapshots, media and worker isolation is still
+deferred. No actual Playwright, browser context or server has been started.
+
+## Deferred validation
+
+Later authorized owners must exercise all five arms and fault/lag combinations,
+retry/deadline/action accounting, original-field retention, stale silent remaps,
+empty/partial/cached/alias/multiple-match history, already-deleted no-op attempts,
+and host origin/route/form/context/body/deadline rejection. Also qualify the real
+browser/HTTP bridge, blocking-read timeouts, trusted lineage binding, Linux
+worker ACL/egress and archive-denial probes. P2/P5 custody and independent
+qualification cannot be replaced by agent source review. Runtime stays
+unverified; no tests, imports of application code, services, installs, Docker,
+credentials, network/model calls, spend or publication were performed here.
+
+## Closed browser consumer source (r3)
+
+`actions.py` accepts only click/fill/select/goto/back/reload/wait/finish with
+closed field sets, exact types and bounded strings/waits. Mutation clicks carry
+captured public operation/target/form/version intent; no hidden expected effects.
+`snapshot.py` rejects oversized snapshots instead of truncating them (64 refs,
+16KiB body, 32KiB body plus visible target text), requires unique refs and matching
+snapshot epoch, and checks only captured control roles for action applicability.
+It does not compare new DOM identity for native R0/R1. Only the recovery guard
+freshly re-resolves semantics for R3/R23.
+
+`routing.py` permits an exact configured loopback origin and the current task's
+GET page/history and POST action routes. Other origins, admin/other-run paths,
+encoded/traversal/query/fragment routes, redirects, downloads and uploads are
+refused. This policy must be installed on every request by a real backend; a
+lexical policy and post-navigation check are not egress isolation proof.
+
+`browser.py` provides a typed `TrustedBridge`/`BrowserAdapter`/`BrowserSession`
+consumer. No default backend, Playwright import/startup or direct HTTP exists.
+The mandatory missing hook must create and attest a fresh context, enforce all
+resource routes/methods and event behavior, extract public DOM snapshots, supply
+authority-bound mutation/history/read timing and lineage, honor deadlines and
+acknowledge actual remap installation. Ordinary browser timeouts do not synthesize
+authority events. Media metadata records unqualified/not-requested/error states.
+In-process facade access is not a secure worker boundary.
+
+Non-mutation browser interactions use the same executor operation/time budget as
+observations/history/mutations/recovery. Mutation clicks retain the existing
+five-arm path and pending-cleanup halt. finish means actor termination only,
+never server success. Navigation requires another captured snapshot before ref
+actions. F2 scripted fill needs a public Body textbox from the future DOM snapshot
+hook; the foundation's button-only projection is insufficient and is not silently
+upgraded to a successful fixture. Provider/admission and real browser/worker hooks
+remain unavailable until separately implemented and qualified.
+
+An exception from `TrustedBridge.execute` is an `UnboundActionResponse`, unless
+it is the separately typed pending-cancellation failure. A browser timeout does
+not establish terminal server response timing. The controller records the request
+under `uncertain_request_ids`, halts as `harness_unknown`, and does not synthesize
+an ActionReceipt, probe history, cancel the possibly issued mutation or retry it.
+Only an actual identity-bound authoritative terminal receipt can enter R2/R23
+reconciliation. The halt is latched before fallible final clock accounting and
+blocks further controller operations; the facade also terminates on unknown/cap.
+Trusted operator reconciliation of in-flight requests is a later required hook.
+
+## Explicit development bridge and loop adapter (r4 source)
+
+`create_development_session(task, origin, **limits)` is an operator-only opt-in
+for InProcessDevelopmentBridge. ContextReceipt.profile is explicitly
+in_process_convenience; BrowserSession rejects it unless allow_convenience=True.
+The logical namespace is fresh but is never a browser/isolation attestation.
+Media is unavailable. No default browser bridge or canonical activation exists.
+
+Page.controls adds visible Body textbox refs separately from Page.targets.
+Driver action/remap still consumes button targets only, preserving native
+silent-remap behavior. Projection keeps form values public/escaped and uses
+ordinary task.history; no private DB version or seal enters snapshots.
+session.close is idempotent logical stop, not OS worker death or rollback.
+
+Executor and BrowserSession observe/history/act now accept caller absolute
+deadlines; mutation and interaction methods accept request correlation. Every
+issued deadline is at most the caller/run/method bound, including R1 waits and
+R2/R23 probes/retries. Correlations are bounded ASCII alphanumeric/dash/underscore,
+recorded once per controller; repeated IDs cannot mint another mutation. Initial
+request ID reaches preparation and action unchanged; automatic retry IDs stay
+trusted-generated. Root intent and immediate origin remain controller-owned.
+
+TrustedActionPortAdapter is an explicit loop seam, not a BrowserSession alias.
+It requires a trusted LoopCodec for D2's accepted Action/observation/feedback
+shapes; default None refuses. It preserves exact caller ID/deadline and maps only
+actual receipt timing into feedback. Missing final response time halts with an
+unavailable error; it cannot construct D2's integer timestamp feedback honestly.
+The explicit create_offline_action_port factory binds the fixed SessionLoopCodec
+and original captured public form resolver. Producer acceptance is still required
+before claiming that join. The resolver retains the actor-selected row rather
+than selecting a private expected target. Canonical worker/authority
+IPC, resource route enforcement and real browser acknowledgment remain pending.
+An uncertain final retry or unresolved cleanup produces no fabricated feedback;
+an earlier terminal receipt remains in the result but cannot stand in for the
+final issued request's missing completion.
+
+## Matrix lifecycle construction (r5)
+
+DevelopmentMatrixPort implements the accepted D3 single-row lifecycle and uses
+one operator authority clock across rows. Each reset creates fresh run, epoch,
+namespace and logical context identities. Caller, run and matrix deadlines bound
+the executor. Actual invoked operation counts and ordinary history receipts are
+retained independently of final clock accounting. Logical stop precedes seal;
+uncertain cleanup halts further dispatch. The external evaluator specification
+never enters the public actor facade. D3 owns scheduling and sidecar validation.
+Missing external admission, prompt clearance or accepted source dependencies
+must remain unattempted. These are source contracts, with no runtime evidence.
+
+## Fixed browser receipt adapter (r6 source)
+
+`FramedBrowserChannel` consumes an operator-preinstalled authenticated byte
+capability using one fixed bounded JSON protocol. `BrowserAuthorityIPC` validates
+run/epoch/clock/request/root correlation and authority timing, including ordinary
+lagged history and actual terminal mutation receipts. It accepts no actor endpoint,
+descriptor number, plugin or callback selector. The external capability must cap
+allocation before returning a frame, enforce real deadlines, authenticate its peer
+and associate the browser context with the server's next bound POST. These are
+required activation hooks, not qualified by a protocol declaration.
+
+`PlaywrightBridge(ipc)` supplies lazy concrete browser commands/public DOM
+projection. Construction starts nothing. Fresh contexts disable page scripts and
+service workers, install exact RoutePolicy on every resource, reject extra
+pages/WebSockets/downloads, and fetch admitted routes without following redirects.
+Redirect/attachment responses are rejected before fulfilment. Only one trusted
+bound ordinary form POST is permitted; no actor JS, arbitrary HTTP or shell exists.
+The fixed internal DOM extractor includes public Body controls/current literal
+form values. Prepare installs public remap markup, compares projected epoch/targets,
+then requests a trusted installed acknowledgment. Click binds IntentContext through
+IPC and obtains terminal completion there even after a browser error. Page headers,
+form fields and client clocks cannot create authoritative lineage or timestamps.
+
+The accepted browser IPC peer/server has application source; privileged activation
+and actual browser qualification remain unjoined. Commands without native timeout support require external hard
+preemption. Dependency/API compatibility, redirects, all-resource enforcement,
+fresh-context behavior and remap acknowledgment have not been exercised. Context
+receipts describe source intent, not isolation PASS.
+
+## Peer composition and public fields (r7 source)
+
+`create_browser_peer_composition(task, origin, context_capability=..., **limits)`
+constructs one operator-only peer/session/bridge/HTTP dispatcher. No listener,
+browser, database or process starts during construction. The in-process framed
+channel has profile `browser_peer_in_process`, requiring explicit convenience
+admission by BrowserSession. This is distinct from canonical operation or an
+authenticated inherited connection. Capability identity does not authenticate
+the operator, HTTP caller or browser context.
+
+The ordinary-event producer is the actual Playwright command path. After a real
+ordinary command completes or its outcome becomes uncertain, its trusted recorder
+calls peer.record_interaction with the fixed capability before requesting IPC
+interaction. The peer stamps its authority clock and retains that actual event;
+the IPC status request cannot create it. Missing producers refuse before browser
+work; later receipt/command failures retain uncertainty rather than mint success.
+
+Installation uses project_snapshot, an actual privileged DOM-only projection.
+It reads current public DOM without now_ns/_timeout/IPC, avoiding reentry into the
+serialized peer during installed verification. The fixed HTTP dispatcher calls
+peer.dispatch_http with its captured capability; headers/forms cannot choose it.
+The accepted TaskHost terminal sink retains actual LocalTaskPort receipts before
+response delivery. The operator must still mount this dispatcher on the admitted
+origin with genuine context authentication and bounded body handling.
+
+Submission preserves the immutable original public intent payload after remap
+installation. Refills use the current form selected by the submitted native ref;
+they do not search for the intended semantic row or consult private expected
+effects. R0/R1 retain native stale/ref-remap exposure; R3/R23 retain their existing
+guarded resolver. Actual added prepare/observe/refill operations share executor
+caps/deadlines and retain local preparatory Step provenance on partial failure.
+Local fill completion is not a fabricated server or ordinary interaction receipt
+while preparation is pending.
+
+Readonly quantity values are observed and compared with the admitted original
+public payload; they are never filled. Button/form/field reads and editable Body
+fills have separate counted boundaries. Legacy bridges without the submission
+hook retain their previous native operation path. Successful preparation ownership
+is retained before post-call clock/cap checks so later failure still cleans up.
+
+The browser transport consumes the real POST response and fulfils only an empty
+204 to the page, preserving its native document/refs for R1 instead of navigating
+to TaskHost receipt JSON. Actual action status/time remain exclusively the peer's
+retained terminal receipt. No reload, semantic target search, changed server effect
+or acknowledgement inference follows from this transport-only response. Typed
+cleanup failure is latched before fallible final clock accounting can mask it.
+
+## Opt-in P7 media (r8 source)
+
+MediaCapturePolicy defaults disabled and is supplied only by trusted operator
+composition, never actor input, CLI artifact or profile selector. Its pre-existing
+absolute output root must be outside the product checkout, Worktrees and OneDrive;
+operators additionally list any other product checkout roots to exclude. A fresh
+exclusive private-intent run directory and video directory contain one fixed trace
+name and native video names. Manifest allocation is exclusive/no-follow. Native
+writers do not promise O_EXCL or race-proof enforcement; ACLs, reparse races, disk
+quota and browser API behavior remain qualification work. No file is removed.
+
+Playwright tracing starts on the private context with sources disabled, stops
+before context close, and videos are inspected only after successful context close.
+Recording context setup failure records video diagnostics, closes known partial
+contexts in the fresh browser, and makes one bounded nonrecording context attempt.
+Failure to stop a partial context aborts freshness rather than minting success.
+Trace/manifest/path inspection errors remain media diagnostics; real resource stop
+failure remains latched on repeated close. Seals/attempts/provenance are not replaced
+by capture errors. Already completed artifacts remain individually complete when
+a later video fails; aggregate status becomes partial.
+
+Completed artifact receipts require a nonempty actual regular no-follow file,
+observed stable size and SHA256 under declared inspection budgets. Partial trace
+files can be retained without a completed_path claim. Local monotonic media timing
+is labelled separately from authoritative effect timing. Limits are observed
+inspection/capture budgets, not hard native-writer or disk quotas. MediaStatus and
+ContextReceipt keep their shapes; rich paths/errors live in frozen private manifests.
+
+After session close, an operator finalizes media with actual failure/success/unknown
+and a stable key shared across paired variant/block scope. Failure is always
+selected; success uses SHA256 modulo10; missing outcome/key retains unknown selection
+and all available media. The helper never infers success from finish, acknowledgment,
+arm or favorable outcome. Unselected files stay private and undeleted; sampling
+reduces referenced video, not recorded storage. Unknown/partial captures are not
+retrospectively fabricated into media.
+
+The exact success rule is SHA256(UTF-8 paired/block key), first eight digest bytes
+interpreted unsigned big-endian, modulo10 equal to0. There is no random-number seed
+or per-arm input. Operators must retain their actual paired key independently to
+reproduce selection; the manifest does not authenticate that input. This nominal
+bucket rule is not a measured exact10% capture fraction for a finite run set.
+Manifest selection/status fields describe actual referenced/captured state; a
+disabled, partial or missing artifact never becomes successful capture by sampling.
